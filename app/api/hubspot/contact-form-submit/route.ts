@@ -13,6 +13,7 @@ type Payload = {
   contactId?: string;
   language?: Language;
   finalSubmit?: boolean;
+  pdfOnly?: boolean;
 };
 
 function normalizePhoneForHubSpot(phone: string) {
@@ -60,9 +61,18 @@ function mapDisplayValue(question: QuestionDef, rawValue: string): string {
   return mapped ? mapped.label : rawValue;
 }
 
-function buildPdfRows(values: Record<string, string>, language: Language) {
+type PdfRow = {
+  label: string;
+  value: string;
+  isAffirmative: boolean;
+};
+
+function buildPdfRows(
+  values: Record<string, string>,
+  language: Language
+) {
   const questions = MEDICAL_QUESTIONNAIRE_SCHEMA[language];
-  const rows: Array<{ label: string; value: string }> = [];
+  const rows: PdfRow[] = [];
 
   for (const question of questions) {
     const rawValue = values[question.name];
@@ -73,6 +83,7 @@ function buildPdfRows(values: Record<string, string>, language: Language) {
     rows.push({
       label: question.label,
       value: mapDisplayValue(question, rawValue.trim()),
+      isAffirmative: rawValue.trim() === "true",
     });
   }
 
@@ -185,7 +196,7 @@ async function generateQuestionnairePdf(
         y,
         size: valueSize,
         font,
-        color: rgb(0.12, 0.12, 0.12),
+        color: row.isAffirmative ? rgb(0.81, 0.12, 0.17) : rgb(0.12, 0.12, 0.12),
       });
       y -= lineGap;
     }
@@ -357,14 +368,14 @@ export async function POST(req: NextRequest) {
 
   const properties = buildContactProperties(body.values || {});
 
-  if (Object.keys(properties).length === 0) {
+  if (!body.finalSubmit && !body.pdfOnly && Object.keys(properties).length === 0) {
     return NextResponse.json(
       { error: "No properties provided" },
       { status: 400 }
     );
   }
 
-  if (body.finalSubmit) {
+  if (body.finalSubmit || body.pdfOnly) {
     try {
       const language: Language = body.language === "de" ? "de" : "en";
       const pdfBytes = await generateQuestionnairePdf(
@@ -374,8 +385,16 @@ export async function POST(req: NextRequest) {
       );
       const fileName = `medical-questionnaire-${body.contactId}-${Date.now()}.pdf`;
       const uploaded = await uploadPdfToHubSpot(token, pdfBytes, fileName);
-      properties.medical_questionnaire =
-        uploaded.fileUrl || uploaded.fileId || "";
+      const linkValue = uploaded.fileUrl || uploaded.fileId || "";
+      if (body.pdfOnly) {
+        properties.medical_questionnaire = linkValue;
+        // In debug-only mode we only patch the PDF link field.
+        for (const key of Object.keys(properties)) {
+          if (key !== "medical_questionnaire") delete properties[key];
+        }
+      } else {
+        properties.medical_questionnaire = linkValue;
+      }
     } catch (err) {
       console.error("PDF generation/upload error", err);
       return NextResponse.json(
@@ -390,7 +409,11 @@ export async function POST(req: NextRequest) {
   )}`;
 
   try {
-    const result = await patchContactWithFallback(targetUrl, token, properties);
+    const result = await patchContactWithFallback(
+      targetUrl,
+      token,
+      properties
+    );
     if (!result.ok) {
       return NextResponse.json(
         { error: "HubSpot request failed", details: result.details },
@@ -398,7 +421,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json(
+      { ok: true, pdf: properties.medical_questionnaire ? { link: properties.medical_questionnaire } : undefined },
+      { status: 200 }
+    );
   } catch (err) {
     console.error("HubSpot error", err);
     return NextResponse.json(

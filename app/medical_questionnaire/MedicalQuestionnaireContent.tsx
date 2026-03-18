@@ -70,6 +70,7 @@ export default function MedicalQuestionnaireContent() {
   const [savingStep, setSavingStep] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [debugPdfStatus, setDebugPdfStatus] = useState<string | null>(null);
   const [phoneCountryIso, setPhoneCountryIso] = useState<string>(
     PHONE_COUNTRIES[0].iso
   );
@@ -512,6 +513,40 @@ export default function MedicalQuestionnaireContent() {
     }
   }
 
+  async function handleGeneratePdfDebug() {
+    setDebugPdfStatus(null);
+    if (!contactId) return;
+
+    try {
+      const res = await fetch("/api/hubspot/contact-form-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values, contactId, language, pdfOnly: true }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `Request failed: ${res.status}`);
+      }
+
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        pdf?: { link?: string };
+      };
+
+      const link = json?.pdf?.link;
+      setDebugPdfStatus(
+        link
+          ? `PDF generated & linked: ${link}`
+          : "PDF generated but link is missing in response."
+      );
+    } catch (err: unknown) {
+      setDebugPdfStatus(
+        err instanceof Error ? err.message : "Failed to generate PDF."
+      );
+    }
+  }
+
   if (submitted) {
     return (
       <main className="page">
@@ -810,6 +845,16 @@ export default function MedicalQuestionnaireContent() {
           {step === 2 && (
             <button
               type="button"
+              className="button button-secondary"
+              onClick={handleGeneratePdfDebug}
+              disabled={submitting || loadingContact || savingStep}
+            >
+              Generate PDF debug
+            </button>
+          )}
+          {step === 2 && (
+            <button
+              type="button"
               className="button button-primary"
               onClick={handleSubmit}
               disabled={submitting || loadingContact}
@@ -818,6 +863,11 @@ export default function MedicalQuestionnaireContent() {
             </button>
           )}
         </div>
+        {step === 2 && debugPdfStatus && (
+          <div className="status status-muted" style={{ marginTop: 8 }}>
+            {debugPdfStatus}
+          </div>
+        )}
       </footer>
     </main>
   );
