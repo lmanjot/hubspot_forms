@@ -563,7 +563,7 @@ export default function MedicalQuestionnaireContent() {
         <div className="actions" style={{ justifyContent: "flex-start", margin: "0 0 12px" }}>
           <button
             type="button"
-            className="button button-secondary"
+            className="button button-secondary button-nav"
             onClick={() => setStep(1)}
             disabled={submitting}
           >
@@ -794,7 +794,7 @@ export default function MedicalQuestionnaireContent() {
           {step === 2 && (
             <button
               type="button"
-              className="button button-secondary"
+              className="button button-secondary button-nav"
               onClick={() => setStep(1)}
               disabled={submitting}
             >
@@ -804,7 +804,7 @@ export default function MedicalQuestionnaireContent() {
           {step === 1 && (
             <button
               type="button"
-              className="button button-secondary"
+              className="button button-secondary button-nav"
               onClick={async () => {
                 const ok = await handleNextStep();
                 if (ok) window.scrollTo({ top: 0, behavior: "smooth" });

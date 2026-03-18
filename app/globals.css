@@ -410,6 +410,13 @@ body {
   cursor: pointer;
 }
 
+.button-nav {
+  padding: 14px 18px;
+  font-size: 1.02rem;
+  border-color: var(--brand);
+  box-shadow: 0 10px 24px rgba(0, 109, 119, 0.14);
+}
+
 .button-primary {
   color: #fff;
   background: linear-gradient(135deg, var(--brand), #0a9396);
