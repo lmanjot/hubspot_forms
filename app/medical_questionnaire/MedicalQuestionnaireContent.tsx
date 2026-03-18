@@ -83,6 +83,7 @@ export default function MedicalQuestionnaireContent() {
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressFocused, setAddressFocused] = useState(false);
   const phoneDropdownRef = useRef<HTMLDivElement | null>(null);
+  const stepHistorySourceRef = useRef<"app" | "pop" | null>(null);
 
   const contactId = searchParams.get("contact_id") ?? undefined;
 
@@ -322,6 +323,55 @@ export default function MedicalQuestionnaireContent() {
     };
   }, [contactId]);
 
+  // Make browser "back" behave like "previous step" while on step 2.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      window.history.replaceState(
+        { ...(window.history.state || {}), mqStep: 1 },
+        "",
+        window.location.href
+      );
+    } catch {
+      // ignore history errors
+    }
+
+    function onPopState(e: PopStateEvent) {
+      const mqStep = (e.state as any)?.mqStep;
+      if (mqStep === 1 || mqStep === 2) {
+        stepHistorySourceRef.current = "pop";
+        setStep(mqStep);
+      }
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (stepHistorySourceRef.current !== "app") return;
+
+    try {
+      if (step === 2) {
+        window.history.pushState(
+          { ...(window.history.state || {}), mqStep: 2 },
+          "",
+          window.location.href
+        );
+      } else {
+        window.history.replaceState(
+          { ...(window.history.state || {}), mqStep: 1 },
+          "",
+          window.location.href
+        );
+      }
+    } finally {
+      stepHistorySourceRef.current = null;
+    }
+  }, [step]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -479,6 +529,7 @@ export default function MedicalQuestionnaireContent() {
     if (Object.keys(validationErrors).length > 0) return false;
     const persisted = await persistDraft();
     if (!persisted) return false;
+    stepHistorySourceRef.current = "app";
     setStep(2);
     return true;
   }
@@ -564,7 +615,10 @@ export default function MedicalQuestionnaireContent() {
           <button
             type="button"
             className="button button-secondary button-nav"
-            onClick={() => setStep(1)}
+            onClick={() => {
+              stepHistorySourceRef.current = "app";
+              setStep(1);
+            }}
             disabled={submitting}
           >
             {tBack}
@@ -795,7 +849,10 @@ export default function MedicalQuestionnaireContent() {
             <button
               type="button"
               className="button button-secondary button-nav"
-              onClick={() => setStep(1)}
+              onClick={() => {
+                stepHistorySourceRef.current = "app";
+                setStep(1);
+              }}
               disabled={submitting}
             >
               {tBack}
