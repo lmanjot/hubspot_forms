@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import type { Language } from "../../../medical_questionnaire/schema";
+
 const HUBSPOT_BASE = "https://api.hubapi.com";
 
 type Payload = {
   values: Record<string, string>;
   contactId?: string;
+  finalSubmit?: boolean;
+  language?: Language;
 };
 
 function normalizePhoneForHubSpot(phone: string) {
@@ -42,6 +46,51 @@ function buildContactProperties(values: Record<string, string>): Record<string, 
   }
 
   return properties;
+}
+
+async function appendMedicalQuestionnaireJson(
+  token: string,
+  contactId: string,
+  values: Record<string, string>,
+  language: Language
+) {
+  const contactUrl = new URL(
+    `${HUBSPOT_BASE}/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`
+  );
+  contactUrl.searchParams.set("properties", "medical_questionnaire_json");
+
+  let existingRaw: unknown = null;
+  try {
+    const res = await fetch(contactUrl.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const json = await res.json().catch(() => ({} as any));
+    existingRaw = (json?.properties as any)?.medical_questionnaire_json ?? null;
+  } catch (err) {
+    console.error("Failed to fetch existing medical_questionnaire_json", err);
+  }
+
+  let history: any[] = [];
+  if (typeof existingRaw === "string" && existingRaw.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(existingRaw);
+      if (Array.isArray(parsed)) history = parsed;
+      else history = [parsed];
+    } catch {
+      // If it's not valid JSON, keep it as a historical blob.
+      history = [{ previousRaw: existingRaw }];
+    }
+  }
+
+  history.push({
+    timestamp: new Date().toISOString(),
+    language,
+    values,
+  });
+
+  return JSON.stringify(history);
 }
 
 function parseMissingPropertyNames(errorText: string): string[] {
@@ -160,6 +209,21 @@ export async function POST(req: NextRequest) {
       { error: "No properties provided" },
       { status: 400 }
     );
+  }
+
+  if (body.finalSubmit) {
+    try {
+      const lang: Language = body.language === "de" ? "de" : "en";
+      const historyJson = await appendMedicalQuestionnaireJson(
+        token,
+        body.contactId,
+        body.values || {},
+        lang
+      );
+      properties.medical_questionnaire_json = historyJson;
+    } catch (err) {
+      console.error("Failed to append medical_questionnaire_json", err);
+    }
   }
 
   const targetUrl = `${HUBSPOT_BASE}/crm/v3/objects/contacts/${encodeURIComponent(

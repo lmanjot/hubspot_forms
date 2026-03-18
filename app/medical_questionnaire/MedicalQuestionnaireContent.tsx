@@ -241,7 +241,7 @@ export default function MedicalQuestionnaireContent() {
       const res = await fetch("/api/hubspot/contact-form-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, contactId }),
+        body: JSON.stringify({ values, contactId, finalSubmit: false, language }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -495,7 +495,7 @@ export default function MedicalQuestionnaireContent() {
       const res = await fetch("/api/hubspot/contact-form-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, contactId }),
+        body: JSON.stringify({ values, contactId, finalSubmit: true, language }),
       });
 
       if (!res.ok) {
