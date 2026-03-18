@@ -1,26 +1,32 @@
 # hubspot_forms
 
-Next.js app for custom HubSpot forms (e.g. medical questionnaire). Fetches form definitions from the HubSpot Forms API, prefills/updates contacts via the CRM API.
+Next.js app for custom HubSpot forms (medical questionnaire).
+
+This version uses a stored questionnaire schema in code (no runtime fetch of HubSpot Form definitions on page load). The page only:
+
+1. fetches contact properties (when `contact_id` is present), and
+2. submits updates to HubSpot contacts.
 
 ## Routes
 
-- **`/`** — Redirects to `/medical_questionnaire`.
-- **`/medical_questionnaire`** — Medical questionnaire (DE/EN). Query params:
-  - `contact_id` — HubSpot contact ID for prefill and PATCH on submit.
-  - `lang` — `de` or `en` (default: `de`).
+- `/` -> redirects to `/medical_questionnaire`
+- `/medical_questionnaire` -> questionnaire page (`lang=de|en`, optional `contact_id`)
 
-## Environment
+## Stored Form Schema
 
-Set in Vercel (or `.env.local` for local dev):
+The questionnaire structure and labels are stored in:
 
-- **`HUBSPOT_TOKEN`** — HubSpot private app token (required).
-- **`HUBSPOT_PORTAL_ID`** — Optional.
-- **`HUBSPOT_SECRET`** — Optional.
+- `app/medical_questionnaire/schema.ts`
 
-## Form IDs
+If you need to change questions, required fields, labels, or options, update this file.
 
-- DE: `2HWzjWa9sTuKJCYnrdu_0ogsn7kf`
-- EN: `2u74nBol5RzeXmtFWMqVO-wsn7kf`
+## Environment Variables
+
+Set in Vercel (or `.env.local`):
+
+- `HUBSPOT_TOKEN` (required)
+- `HUBSPOT_PORTAL_ID` (optional)
+- `HUBSPOT_SECRET` (optional)
 
 ## Run locally
 
@@ -29,8 +35,8 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000/medical_questionnaire](http://localhost:3000/medical_questionnaire). Add `?contact_id=123&lang=en` to test with a contact.
+Open: `http://localhost:3000/medical_questionnaire`
 
-## Deploy (Vercel)
+## Deploy
 
-Connect this repo; leave Root Directory empty. Add `HUBSPOT_TOKEN` (and optional env) in project settings.
+Connect repo in Vercel, keep Root Directory empty, and set env vars.

@@ -8,7 +8,7 @@ type Payload = {
   contactId?: string;
 };
 
-/** Build contact properties from form values. Keys are HubSpot property names from the form definition. */
+/** Build contact properties from form values. Keys are HubSpot property names from the stored schema. */
 function buildContactProperties(values: Record<string, string>): Record<string, string> {
   const properties: Record<string, string> = {};
   for (const [key, value] of Object.entries(values)) {
