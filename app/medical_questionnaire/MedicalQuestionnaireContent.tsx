@@ -70,7 +70,6 @@ export default function MedicalQuestionnaireContent() {
   const [savingStep, setSavingStep] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [debugPdfStatus, setDebugPdfStatus] = useState<string | null>(null);
   const [phoneCountryIso, setPhoneCountryIso] = useState<string>(
     PHONE_COUNTRIES[0].iso
   );
@@ -242,7 +241,7 @@ export default function MedicalQuestionnaireContent() {
       const res = await fetch("/api/hubspot/contact-form-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, contactId, language, finalSubmit: false }),
+        body: JSON.stringify({ values, contactId }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -496,7 +495,7 @@ export default function MedicalQuestionnaireContent() {
       const res = await fetch("/api/hubspot/contact-form-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, contactId, language, finalSubmit: true }),
+        body: JSON.stringify({ values, contactId }),
       });
 
       if (!res.ok) {
@@ -510,40 +509,6 @@ export default function MedicalQuestionnaireContent() {
       setSubmitError(tGenericError);
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function handleGeneratePdfDebug() {
-    setDebugPdfStatus(null);
-    if (!contactId) return;
-
-    try {
-      const res = await fetch("/api/hubspot/contact-form-submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, contactId, language, pdfOnly: true }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || `Request failed: ${res.status}`);
-      }
-
-      const json = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        pdf?: { link?: string };
-      };
-
-      const link = json?.pdf?.link;
-      setDebugPdfStatus(
-        link
-          ? `PDF generated & linked: ${link}`
-          : "PDF generated but link is missing in response."
-      );
-    } catch (err: unknown) {
-      setDebugPdfStatus(
-        err instanceof Error ? err.message : "Failed to generate PDF."
-      );
     }
   }
 
@@ -593,6 +558,19 @@ export default function MedicalQuestionnaireContent() {
           </div>
         </div>
       </header>
+
+      {step === 2 && (
+        <div className="actions" style={{ justifyContent: "flex-start", margin: "0 0 12px" }}>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => setStep(1)}
+            disabled={submitting}
+          >
+            {tBack}
+          </button>
+        </div>
+      )}
 
       <section className="stepper card">
         <div className="stepper-row">
@@ -845,16 +823,6 @@ export default function MedicalQuestionnaireContent() {
           {step === 2 && (
             <button
               type="button"
-              className="button button-secondary"
-              onClick={handleGeneratePdfDebug}
-              disabled={submitting || loadingContact || savingStep}
-            >
-              Generate PDF debug
-            </button>
-          )}
-          {step === 2 && (
-            <button
-              type="button"
               className="button button-primary"
               onClick={handleSubmit}
               disabled={submitting || loadingContact}
@@ -863,11 +831,6 @@ export default function MedicalQuestionnaireContent() {
             </button>
           )}
         </div>
-        {step === 2 && debugPdfStatus && (
-          <div className="status status-muted" style={{ marginTop: 8 }}>
-            {debugPdfStatus}
-          </div>
-        )}
       </footer>
     </main>
   );

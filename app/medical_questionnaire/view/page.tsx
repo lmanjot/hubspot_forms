@@ -26,8 +26,6 @@ export default async function MedicalQuestionnaireViewPage({
 
   const requestedProperties = [
     ...ALL_MEDICAL_FIELD_NAMES,
-    // link to the stored PDF generated at submit time
-    "medical_questionnaire",
   ];
 
   if (!token) {
@@ -53,7 +51,6 @@ export default async function MedicalQuestionnaireViewPage({
   }
 
   let values: Record<string, string> = {};
-  let pdfLink: string | null = null;
   try {
     const hubspotUrl = new URL(
       `${HUBSPOT_BASE}/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`
@@ -91,12 +88,6 @@ export default async function MedicalQuestionnaireViewPage({
       if (v !== null && v !== undefined) values[name] = String(v);
     }
 
-    const maybePdf = props["medical_questionnaire"];
-    if (maybePdf !== null && maybePdf !== undefined) {
-      pdfLink = String(maybePdf);
-      // HubSpot may return just an ID; still show it as a link-ish value if so.
-      if (pdfLink.trim().length === 0) pdfLink = null;
-    }
   } catch (err) {
     return (
       <main className="page">
@@ -122,8 +113,8 @@ export default async function MedicalQuestionnaireViewPage({
 
   const subtitle =
     language === "de"
-      ? "Medizinischer Fragebogen (nicht editierbar)"
-      : "Medical Questionnaire (read-only)";
+      ? "Medizinischer Fragebogen"
+      : "Medical Questionnaire";
 
   return (
     <main className="page">
@@ -133,21 +124,6 @@ export default async function MedicalQuestionnaireViewPage({
           <p className="page-subtitle">{subtitle}</p>
         </div>
       </header>
-
-      {pdfLink && (
-        <section className="card">
-          <div className="doctor-field-row">
-            <div className="doctor-field-label">
-              {language === "de" ? "PDF" : "PDF"}
-            </div>
-            <div className="doctor-field-value">
-              <a href={pdfLink} target="_blank" rel="noreferrer">
-                {language === "de" ? "Öffnen" : "Open"} PDF
-              </a>
-            </div>
-          </div>
-        </section>
-      )}
 
       <section className="card">
         <h2 className="doctor-section-title">
