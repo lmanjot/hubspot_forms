@@ -867,7 +867,7 @@ export default function MedicalQuestionnaireContent() {
           {step === 2 && (
             <button
               type="button"
-              className="button button-primary"
+              className="button button-primary button-nav"
               onClick={handleSubmit}
               disabled={submitting || loadingContact}
             >
