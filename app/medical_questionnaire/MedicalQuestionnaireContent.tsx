@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ALL_MEDICAL_FIELD_NAMES,
@@ -28,12 +28,14 @@ type AddressSuggestion = {
 const PHONE_COUNTRIES: PhoneCountry[] = [
   { iso: "CH", label: "Switzerland", dial: "+41" },
   { iso: "DE", label: "Germany", dial: "+49" },
+  { iso: "FR", label: "France", dial: "+33" },
   { iso: "IT", label: "Italy", dial: "+39" },
   { iso: "AT", label: "Austria", dial: "+43" },
-  { iso: "FR", label: "France", dial: "+33" },
+  { iso: "ES", label: "Spain", dial: "+34" },
   { iso: "GB", label: "United Kingdom", dial: "+44" },
   { iso: "US", label: "United States", dial: "+1" },
 ];
+const PRIORITY_PHONE_ISOS = ["CH", "DE", "FR", "IT", "AT", "ES"] as const;
 
 function isLongField(question: QuestionDef) {
   return (
@@ -75,9 +77,12 @@ export default function MedicalQuestionnaireContent() {
     PHONE_COUNTRIES[0].dial
   );
   const [phoneCountries, setPhoneCountries] = useState<PhoneCountry[]>(PHONE_COUNTRIES);
+  const [phoneDropdownOpen, setPhoneDropdownOpen] = useState(false);
+  const [phoneCountrySearch, setPhoneCountrySearch] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressFocused, setAddressFocused] = useState(false);
+  const phoneDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const contactId = searchParams.get("contact_id") ?? undefined;
 
@@ -86,6 +91,23 @@ export default function MedicalQuestionnaireContent() {
     () => [...phoneCountries].sort((a, b) => b.dial.length - a.dial.length),
     [phoneCountries]
   );
+  const orderedPhoneCountries = useMemo(() => {
+    return [...phoneCountries].sort((a, b) => {
+      const ia = PRIORITY_PHONE_ISOS.indexOf(a.iso as (typeof PRIORITY_PHONE_ISOS)[number]);
+      const ib = PRIORITY_PHONE_ISOS.indexOf(b.iso as (typeof PRIORITY_PHONE_ISOS)[number]);
+      const aRank = ia === -1 ? Number.MAX_SAFE_INTEGER : ia;
+      const bRank = ib === -1 ? Number.MAX_SAFE_INTEGER : ib;
+      if (aRank !== bRank) return aRank - bRank;
+      return a.label.localeCompare(b.label, "en");
+    });
+  }, [phoneCountries]);
+  const filteredPhoneCountries = useMemo(() => {
+    const query = phoneCountrySearch.trim().toLowerCase();
+    if (!query) return orderedPhoneCountries;
+    return orderedPhoneCountries.filter((country) =>
+      `${country.iso} ${country.label} ${country.dial}`.toLowerCase().includes(query)
+    );
+  }, [orderedPhoneCountries, phoneCountrySearch]);
 
   function parsePhoneWithCountries(value: string) {
     const compact = value.replace(/[^\d+]/g, "");
@@ -198,6 +220,12 @@ export default function MedicalQuestionnaireContent() {
     updateValue("phone", nextValue);
   }
 
+  function handlePhoneCountrySelect(nextIso: string) {
+    applyPhoneCountry(nextIso);
+    setPhoneDropdownOpen(false);
+    setPhoneCountrySearch("");
+  }
+
   function applyAddressSuggestion(item: AddressSuggestion) {
     updateValue("address", item.street || item.label);
     if (item.zip) updateValue("zip", item.zip);
@@ -213,7 +241,7 @@ export default function MedicalQuestionnaireContent() {
       const res = await fetch("/api/hubspot/contact-form-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, contactId }),
+        body: JSON.stringify({ values, contactId, language, finalSubmit: false }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -348,6 +376,19 @@ export default function MedicalQuestionnaireContent() {
   }, []);
 
   useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!phoneDropdownRef.current) return;
+      if (!phoneDropdownRef.current.contains(event.target as Node)) {
+        setPhoneDropdownOpen(false);
+        setPhoneCountrySearch("");
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
     if (step !== 1) return;
     const query = (values.address ?? "").trim();
     if (query.length < 3 || !addressFocused) {
@@ -454,7 +495,7 @@ export default function MedicalQuestionnaireContent() {
       const res = await fetch("/api/hubspot/contact-form-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, contactId }),
+        body: JSON.stringify({ values, contactId, language, finalSubmit: true }),
       });
 
       if (!res.ok) {
@@ -615,17 +656,52 @@ export default function MedicalQuestionnaireContent() {
                       </label>
                     </div>
                     <div className="phone-row">
-                      <select
-                        className="select phone-country"
-                        value={phoneCountryIso}
-                        onChange={(e) => applyPhoneCountry(e.target.value)}
-                      >
-                        {phoneCountries.map((country) => (
-                          <option key={country.iso} value={country.iso}>
-                            {country.iso}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="phone-country-dropdown" ref={phoneDropdownRef}>
+                        <button
+                          type="button"
+                          className="phone-country-trigger"
+                          onClick={() => setPhoneDropdownOpen((prev) => !prev)}
+                          aria-haspopup="listbox"
+                          aria-expanded={phoneDropdownOpen}
+                        >
+                          <span>{phoneCountryIso}</span>
+                          <span className="phone-country-caret" />
+                        </button>
+                        {phoneDropdownOpen && (
+                          <div className="phone-country-menu" role="listbox">
+                            <input
+                              type="text"
+                              className="phone-country-search"
+                              placeholder={language === "de" ? "Suchen" : "Search"}
+                              value={phoneCountrySearch}
+                              onChange={(e) => setPhoneCountrySearch(e.target.value)}
+                            />
+                            <div className="phone-country-list">
+                              {filteredPhoneCountries.map((country) => (
+                                <button
+                                  key={country.iso}
+                                  type="button"
+                                  className={`phone-country-option ${
+                                    country.iso === phoneCountryIso
+                                      ? "phone-country-option-active"
+                                      : ""
+                                  }`}
+                                  onClick={() => handlePhoneCountrySelect(country.iso)}
+                                >
+                                  <span className="phone-country-option-iso">{country.iso}</span>
+                                  <span className="phone-country-option-label">{country.label}</span>
+                                  <span className="phone-country-option-dial">{country.dial}</span>
+                                </button>
+                              ))}
+                              {filteredPhoneCountries.length === 0 && (
+                                <div className="phone-country-empty">
+                                  {language === "de" ? "Keine Treffer" : "No matches"}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <input
                         type="tel"
                         className="input"
