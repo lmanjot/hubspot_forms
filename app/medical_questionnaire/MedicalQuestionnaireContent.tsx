@@ -3,19 +3,35 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  ALL_MEDICAL_FIELD_NAMES,
   MEDICAL_QUESTIONNAIRE_SCHEMA,
   type Language,
-  type Question,
+  type QuestionDef,
 } from "./schema";
 
 type FormState = Record<string, string>;
 type FormErrors = Record<string, string>;
 
+function isLongField(question: QuestionDef) {
+  return (
+    question.fieldType === "radio" ||
+    question.label.length > 90 ||
+    question.fieldType === "single_line_text" && question.name.endsWith("_detail")
+  );
+}
+
+function inputTypeFor(fieldType: QuestionDef["fieldType"]): string {
+  if (fieldType === "email") return "email";
+  if (fieldType === "phone") return "tel";
+  if (fieldType === "number") return "number";
+  if (fieldType === "datepicker") return "date";
+  return "text";
+}
+
 export default function MedicalQuestionnaireContent() {
   const searchParams = useSearchParams();
   const initialLang =
     (searchParams.get("lang") as Language | null) ?? ("de" as Language);
-
   const [language, setLanguage] = useState<Language>(initialLang);
   const [values, setValues] = useState<FormState>({});
   const [errors, setErrors] = useState<FormErrors>({});
@@ -26,8 +42,9 @@ export default function MedicalQuestionnaireContent() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const contactId = searchParams.get("contact_id") ?? undefined;
-  const questions: Question[] = useMemo(
-    () => MEDICAL_QUESTIONNAIRE_SCHEMA[language],
+
+  const visibleQuestions = useMemo(
+    () => MEDICAL_QUESTIONNAIRE_SCHEMA[language].filter((q) => !q.hidden),
     [language]
   );
 
@@ -35,16 +52,16 @@ export default function MedicalQuestionnaireContent() {
     language === "de" ? "Medizinischer Fragebogen" : "Medical Questionnaire";
   const subtitle =
     language === "de"
-      ? "Bitte beantworten Sie die Fragen so genau wie moeglich."
+      ? "Bitte beantworten Sie die Fragen so genau wie möglich."
       : "Please answer the questions as accurately as possible.";
   const allDataSecure =
     language === "de"
-      ? "Ihre Daten werden verschluesselt uebertragen und sicher gespeichert."
+      ? "Ihre Daten werden verschlüsselt übertragen und sicher gespeichert."
       : "Your data is transmitted securely and stored safely.";
 
   const tRequired =
     language === "de"
-      ? "Bitte fuellen Sie dieses Feld aus."
+      ? "Bitte füllen Sie dieses Feld aus."
       : "Please complete this field.";
   const tGenericError =
     language === "de"
@@ -70,8 +87,12 @@ export default function MedicalQuestionnaireContent() {
       setLoadingError(null);
 
       try {
+        const query = ALL_MEDICAL_FIELD_NAMES
+          .map((name) => `properties=${encodeURIComponent(name)}`)
+          .join("&");
+
         const contactRes = await fetch(
-          `/api/hubspot/contacts/${encodeURIComponent(currentContactId)}`
+          `/api/hubspot/contacts/${encodeURIComponent(currentContactId)}?${query}`
         );
 
         if (!contactRes.ok) {
@@ -84,9 +105,10 @@ export default function MedicalQuestionnaireContent() {
         const props = contactJson.properties || {};
         const initialValues: FormState = {};
 
-        for (const q of MEDICAL_QUESTIONNAIRE_SCHEMA.de) {
-          if (props[q.name] != null) {
-            initialValues[q.id] = String(props[q.name]);
+        for (const name of ALL_MEDICAL_FIELD_NAMES) {
+          const value = props[name];
+          if (value !== null && value !== undefined) {
+            initialValues[name] = String(value);
           }
         }
 
@@ -115,18 +137,20 @@ export default function MedicalQuestionnaireContent() {
   }, [contactId]);
 
   const requiredFields = useMemo(
-    () => questions.filter((q) => q.required),
-    [questions]
+    () => visibleQuestions.filter((q) => q.required),
+    [visibleQuestions]
   );
 
   function validate(): FormErrors {
     const nextErrors: FormErrors = {};
+
     for (const field of requiredFields) {
-      const value = values[field.id];
-      if (!value || value.trim().length === 0) {
-        nextErrors[field.id] = tRequired;
+      const value = values[field.name] ?? "";
+      if (value.trim().length === 0) {
+        nextErrors[field.name] = tRequired;
       }
     }
+
     return nextErrors;
   }
 
@@ -142,7 +166,7 @@ export default function MedicalQuestionnaireContent() {
       const res = await fetch("/api/hubspot/contact-form-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language, values, contactId }),
+        body: JSON.stringify({ values, contactId }),
       });
 
       if (!res.ok) {
@@ -223,48 +247,65 @@ export default function MedicalQuestionnaireContent() {
           <p className="card-description status-error">{loadingError}</p>
         ) : (
           <div className="grid">
-            {questions.map((q) => {
-              const error = errors[q.id];
+            {visibleQuestions.map((q) => {
+              const fieldKey = q.name;
+              const value = values[fieldKey] ?? "";
+              const error = errors[fieldKey];
+              const isFullWidth = isLongField(q);
 
-              if (q.type === "textarea") {
+              if (q.fieldType === "radio" && q.options) {
                 return (
-                  <div key={q.id} className="field grid-full">
+                  <div key={fieldKey} className={`field ${isFullWidth ? "grid-full" : ""}`}>
                     <div className="field-label-row">
                       <label className="field-label">
                         {q.label} {q.required && <span className="field-required">*</span>}
                       </label>
                     </div>
-                    {q.help && <p className="field-help">{q.help}</p>}
-                    <textarea
-                      className="textarea"
-                      value={values[q.id] ?? ""}
-                      onChange={(e) =>
-                        setValues((prev) => ({ ...prev, [q.id]: e.target.value }))
-                      }
-                    />
+                    <div className="radio-group">
+                      {q.options.map((opt) => {
+                        const selected = value === opt.value;
+                        return (
+                          <label
+                            key={opt.value}
+                            className={`chip ${selected ? "chip-selected" : ""}`}
+                          >
+                            <span className="chip-dot" />
+                            <input
+                              type="radio"
+                              name={fieldKey}
+                              value={opt.value}
+                              checked={selected}
+                              onChange={() =>
+                                setValues((prev) => ({ ...prev, [fieldKey]: opt.value }))
+                              }
+                            />
+                            {opt.label}
+                          </label>
+                        );
+                      })}
+                    </div>
                     {error && <div className="field-error">{error}</div>}
                   </div>
                 );
               }
 
-              if (q.type === "select" && q.options) {
+              if (q.fieldType === "dropdown" && q.options) {
                 return (
-                  <div key={q.id} className="field">
+                  <div key={fieldKey} className={`field ${isFullWidth ? "grid-full" : ""}`}>
                     <div className="field-label-row">
                       <label className="field-label">
                         {q.label} {q.required && <span className="field-required">*</span>}
                       </label>
                     </div>
-                    {q.help && <p className="field-help">{q.help}</p>}
                     <select
                       className="select"
-                      value={values[q.id] ?? ""}
+                      value={value}
                       onChange={(e) =>
-                        setValues((prev) => ({ ...prev, [q.id]: e.target.value }))
+                        setValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))
                       }
                     >
                       <option value="">
-                        {language === "de" ? "Bitte auswaehlen..." : "Select..."}
+                        {language === "de" ? "Bitte auswählen..." : "Select..."}
                       </option>
                       {q.options.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -278,18 +319,18 @@ export default function MedicalQuestionnaireContent() {
               }
 
               return (
-                <div key={q.id} className="field">
+                <div key={fieldKey} className={`field ${isFullWidth ? "grid-full" : ""}`}>
                   <div className="field-label-row">
                     <label className="field-label">
                       {q.label} {q.required && <span className="field-required">*</span>}
                     </label>
                   </div>
-                  {q.help && <p className="field-help">{q.help}</p>}
                   <input
+                    type={inputTypeFor(q.fieldType)}
                     className="input"
-                    value={values[q.id] ?? ""}
+                    value={value}
                     onChange={(e) =>
-                      setValues((prev) => ({ ...prev, [q.id]: e.target.value }))
+                      setValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))
                     }
                   />
                   {error && <div className="field-error">{error}</div>}
@@ -315,7 +356,7 @@ export default function MedicalQuestionnaireContent() {
             type="button"
             className="button button-primary"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || loadingContact}
           >
             {submitting ? tSaving : tSubmit}
           </button>

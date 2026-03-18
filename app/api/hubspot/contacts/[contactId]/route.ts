@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const HUBSPOT_BASE = "https://api.hubapi.com";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ contactId: string }> }
 ) {
   const token = process.env.HUBSPOT_TOKEN;
@@ -24,17 +24,27 @@ export async function GET(
     );
   }
 
+  const requestUrl = new URL(req.url);
+  const requestedProperties = requestUrl.searchParams
+    .getAll("properties")
+    .flatMap((item) => item.split(","))
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const hubspotUrl = new URL(
+    `${HUBSPOT_BASE}/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`
+  );
+
+  for (const property of requestedProperties) {
+    hubspotUrl.searchParams.append("properties", property);
+  }
+
   try {
-    const res = await fetch(
-      `${HUBSPOT_BASE}/crm/v3/objects/contacts/${encodeURIComponent(
-        contactId
-      )}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const res = await fetch(hubspotUrl.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     const json = await res.json();
 
@@ -54,3 +64,4 @@ export async function GET(
     );
   }
 }
+

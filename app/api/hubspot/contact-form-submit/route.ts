@@ -3,19 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 const HUBSPOT_BASE = "https://api.hubapi.com";
 
 type Payload = {
-  language?: "de" | "en";
   values: Record<string, string>;
   contactId?: string;
 };
 
-/** Build contact properties from form values. Keys are HubSpot property names from the stored schema. */
 function buildContactProperties(values: Record<string, string>): Record<string, string> {
   const properties: Record<string, string> = {};
+
   for (const [key, value] of Object.entries(values)) {
-    if (typeof value === "string" && value.trim().length > 0) {
-      properties[key] = value.trim();
+    if (typeof value === "string") {
+      properties[key] = value;
     }
   }
+
   return properties;
 }
 
@@ -37,35 +37,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const properties = buildContactProperties(body.values || {});
-
-  if (body.contactId) {
-    if (Object.keys(properties).length === 0) {
-      return NextResponse.json(
-        { error: "No properties to update" },
-        { status: 400 }
-      );
-    }
-  } else {
-    if (Object.keys(properties).length === 0) {
-      return NextResponse.json(
-        { error: "Missing identification (contactId or form values)" },
-        { status: 400 }
-      );
-    }
+  if (!body.contactId) {
+    return NextResponse.json(
+      { error: "Missing contactId for contact update" },
+      { status: 400 }
+    );
   }
 
+  const properties = buildContactProperties(body.values || {});
+
+  if (Object.keys(properties).length === 0) {
+    return NextResponse.json(
+      { error: "No properties provided" },
+      { status: 400 }
+    );
+  }
+
+  const targetUrl = `${HUBSPOT_BASE}/crm/v3/objects/contacts/${encodeURIComponent(
+    body.contactId
+  )}`;
+
   try {
-    const targetUrl = body.contactId
-      ? `${HUBSPOT_BASE}/crm/v3/objects/contacts/${encodeURIComponent(
-          body.contactId
-        )}`
-      : `${HUBSPOT_BASE}/crm/v3/objects/contacts`;
-
-    const method = body.contactId ? "PATCH" : "POST";
-
     const res = await fetch(targetUrl, {
-      method,
+      method: "PATCH",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -90,3 +84,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
