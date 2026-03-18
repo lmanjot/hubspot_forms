@@ -179,13 +179,43 @@ async function generateQuestionnairePdf(
       y = page.getHeight() - margin;
     }
 
+    const rowStartY = y;
+
+    const labelColor = row.isAffirmative
+      ? rgb(0.81, 0.12, 0.17)
+      : rgb(0.1, 0.2, 0.3);
+    const valueColor = row.isAffirmative
+      ? rgb(0.81, 0.12, 0.17)
+      : rgb(0.12, 0.12, 0.12);
+
+    // Highlight affirmative answers with a red background behind the whole block.
+    if (row.isAffirmative) {
+      const padX = 6;
+      const padY = 3;
+      const bgX = margin - padX;
+      const bgY = rowStartY - needed - padY;
+      const bgW = contentWidth + padX * 2;
+      const bgH = needed + padY * 2;
+
+      page.drawRectangle({
+        x: bgX,
+        y: bgY,
+        width: bgW,
+        height: bgH,
+        color: rgb(1, 0.2, 0.25),
+        opacity: 0.16,
+        borderColor: rgb(0.81, 0.12, 0.17),
+        borderWidth: 1,
+      });
+    }
+
     for (const line of labelLines) {
       page.drawText(line, {
         x: margin,
         y,
         size: labelSize,
         font: bold,
-        color: rgb(0.1, 0.2, 0.3),
+        color: labelColor,
       });
       y -= lineGap;
     }
@@ -196,7 +226,7 @@ async function generateQuestionnairePdf(
         y,
         size: valueSize,
         font,
-        color: row.isAffirmative ? rgb(0.81, 0.12, 0.17) : rgb(0.12, 0.12, 0.12),
+        color: valueColor,
       });
       y -= lineGap;
     }

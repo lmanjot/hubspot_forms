@@ -163,8 +163,11 @@ export default async function MedicalQuestionnaireViewPage({
                 ? mapDisplayValue(q, rawValue)
                 : "—";
             return (
-              <div key={q.name} className="doctor-table-row">
-                <div className="doctor-table-label">
+              <div
+                key={q.name}
+                className={`doctor-table-row ${isAffirmative ? "doctor-row-yes" : ""}`}
+              >
+                <div className={`doctor-table-label ${isAffirmative ? "doctor-yes" : ""}`}>
                   {q.label}
                 </div>
                 <div className={`doctor-table-value ${isAffirmative ? "doctor-yes" : ""}`}>
@@ -190,8 +193,11 @@ export default async function MedicalQuestionnaireViewPage({
                 ? mapDisplayValue(q, rawValue)
                 : "—";
             return (
-              <div key={q.name} className="doctor-table-row">
-                <div className="doctor-table-label">
+              <div
+                key={q.name}
+                className={`doctor-table-row ${isAffirmative ? "doctor-row-yes" : ""}`}
+              >
+                <div className={`doctor-table-label ${isAffirmative ? "doctor-yes" : ""}`}>
                   {q.label}
                 </div>
                 <div className={`doctor-table-value ${isAffirmative ? "doctor-yes" : ""}`}>

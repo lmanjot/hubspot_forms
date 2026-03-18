@@ -532,6 +532,12 @@ body {
   font-weight: 700;
 }
 
+.doctor-row-yes {
+  background: #fff5f5;
+  border-color: rgba(214, 69, 69, 0.35);
+  box-shadow: 0 10px 25px rgba(214, 69, 69, 0.12);
+}
+
 .doctor-field-row {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);
