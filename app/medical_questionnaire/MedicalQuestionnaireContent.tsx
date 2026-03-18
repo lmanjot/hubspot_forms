@@ -614,7 +614,7 @@ export default function MedicalQuestionnaireContent() {
         <div className="actions" style={{ justifyContent: "flex-start", margin: "0 0 12px" }}>
           <button
             type="button"
-            className="button button-secondary button-nav"
+            className="button button-secondary"
             onClick={() => {
               stepHistorySourceRef.current = "app";
               setStep(1);
@@ -845,19 +845,6 @@ export default function MedicalQuestionnaireContent() {
           <p className="declaration-text">{declarationText}</p>
         )}
         <div className="actions form-actions">
-          {step === 2 && (
-            <button
-              type="button"
-              className="button button-secondary button-nav"
-              onClick={() => {
-                stepHistorySourceRef.current = "app";
-                setStep(1);
-              }}
-              disabled={submitting}
-            >
-              {tBack}
-            </button>
-          )}
           {step === 1 && (
             <button
               type="button"
