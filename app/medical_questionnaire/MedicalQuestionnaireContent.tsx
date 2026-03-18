@@ -28,9 +28,9 @@ type AddressSuggestion = {
 const PHONE_COUNTRIES: PhoneCountry[] = [
   { iso: "CH", label: "Switzerland", dial: "+41" },
   { iso: "DE", label: "Germany", dial: "+49" },
+  { iso: "IT", label: "Italy", dial: "+39" },
   { iso: "AT", label: "Austria", dial: "+43" },
   { iso: "FR", label: "France", dial: "+33" },
-  { iso: "IT", label: "Italy", dial: "+39" },
   { iso: "GB", label: "United Kingdom", dial: "+44" },
   { iso: "US", label: "United States", dial: "+1" },
 ];
@@ -45,39 +45,6 @@ function isLongField(question: QuestionDef) {
 
 function digitsOnly(input: string) {
   return input.replace(/\D/g, "");
-}
-
-function normalizeDial(input: string) {
-  if (!input.startsWith("+")) return `+${digitsOnly(input)}`;
-  return `+${digitsOnly(input)}`;
-}
-
-function normalizeLocalPhone(local: string) {
-  return digitsOnly(local).replace(/^0+/, "");
-}
-
-function buildPhoneValue(dial: string, local: string) {
-  const cleanDial = normalizeDial(dial);
-  const cleanLocal = normalizeLocalPhone(local);
-  return `${cleanDial}${cleanLocal}`;
-}
-
-function parsePhoneValue(value: string): { dial: string; local: string } {
-  const compact = value.replace(/[^\d+]/g, "");
-  const sortedCountries = [...PHONE_COUNTRIES].sort(
-    (a, b) => b.dial.length - a.dial.length
-  );
-
-  for (const country of sortedCountries) {
-    if (compact.startsWith(country.dial)) {
-      return {
-        dial: country.dial,
-        local: normalizeLocalPhone(compact.slice(country.dial.length)),
-      };
-    }
-  }
-
-  return { dial: PHONE_COUNTRIES[0].dial, local: normalizeLocalPhone(compact) };
 }
 
 function inputTypeFor(fieldType: QuestionDef["fieldType"]): string {
@@ -101,10 +68,13 @@ export default function MedicalQuestionnaireContent() {
   const [savingStep, setSavingStep] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [phoneCountryDial, setPhoneCountryDial] = useState<string>(
+  const [phoneCountryIso, setPhoneCountryIso] = useState<string>(
+    PHONE_COUNTRIES[0].iso
+  );
+  const [phoneInputValue, setPhoneInputValue] = useState<string>(
     PHONE_COUNTRIES[0].dial
   );
-  const [phoneLocalValue, setPhoneLocalValue] = useState<string>("");
+  const [phoneCountries, setPhoneCountries] = useState<PhoneCountry[]>(PHONE_COUNTRIES);
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressFocused, setAddressFocused] = useState(false);
@@ -112,6 +82,28 @@ export default function MedicalQuestionnaireContent() {
   const contactId = searchParams.get("contact_id") ?? undefined;
 
   const allQuestions = useMemo(() => MEDICAL_QUESTIONNAIRE_SCHEMA[language], [language]);
+  const countriesByDialLength = useMemo(
+    () => [...phoneCountries].sort((a, b) => b.dial.length - a.dial.length),
+    [phoneCountries]
+  );
+
+  function parsePhoneWithCountries(value: string) {
+    const compact = value.replace(/[^\d+]/g, "");
+    for (const country of countriesByDialLength) {
+      if (compact.startsWith(country.dial)) {
+        return {
+          dial: country.dial,
+          local: compact.slice(country.dial.length),
+          iso: country.iso,
+        };
+      }
+    }
+    return {
+      dial: PHONE_COUNTRIES[0].dial,
+      local: compact.replace(/^\+/, ""),
+      iso: PHONE_COUNTRIES[0].iso,
+    };
+  }
 
   function isVisibleByCondition(question: QuestionDef) {
     if (!question.showWhen) return true;
@@ -162,17 +154,6 @@ export default function MedicalQuestionnaireContent() {
   const tSavingDraft = language === "de" ? "Speichert ..." : "Saving draft...";
   const tLanguage = language === "de" ? "Sprache" : "Language";
   const tStepTitle = language === "de" ? "Schritt" : "Step";
-  const introParagraphs = language === "de"
-    ? [
-        "Dieser medizinische Fragebogen hilft uns, einen individuellen Behandlungsplan f\u00fcr Sie zu erstellen. Wir bitten Sie, ihn sorgf\u00e4ltig auszuf\u00fcllen.",
-        "Ihre Angaben werden ausschlie\u00dflich f\u00fcr medizinische Zwecke verwendet und niemals an Dritte weitergegeben. Wenn Sie es w\u00fcnschen, k\u00f6nnen Sie die L\u00f6schung Ihrer Daten nach Abschluss Ihrer Behandlung beantragen.",
-        "Wir danken Ihnen f\u00fcr Ihr Vertrauen in die Mara Care AG!",
-      ]
-    : [
-        "This medical questionnaire helps us create a personalized treatment plan for you. We kindly ask you to fill it out carefully.",
-        "Your information is used exclusively for medical purposes and is never shared with third parties. If you wish, you can request the deletion of your data after your treatment is complete.",
-        "Thank you for your trust in Mara Care AG!",
-      ];
   const declarationText =
     language === "de"
       ? "Ich best\u00e4tige hiermit, dass die Angaben auf mich zutreffen und wahrheitsgem\u00e4\u00df beantwortet wurden. Mit meiner Unterschrift erm\u00e4chtige ich die Mara Care AG, Informationen und Daten ausschlie\u00dflich zu Behandlungszwecken weiterzugeben."
@@ -190,19 +171,31 @@ export default function MedicalQuestionnaireContent() {
     });
   }
 
-  function updatePhone(nextDial: string, nextLocal: string) {
-    const cleanLocal = normalizeLocalPhone(nextLocal);
-    setPhoneCountryDial(nextDial);
-    setPhoneLocalValue(cleanLocal);
-    updateValue("phone", buildPhoneValue(nextDial, cleanLocal));
+  function updatePhoneFromInput(nextRaw: string) {
+    const normalizedRaw =
+      nextRaw.length === 0
+        ? ""
+        : nextRaw.startsWith("+")
+          ? `+${nextRaw.slice(1).replace(/[^\d]/g, "")}`
+          : `+${nextRaw.replace(/[^\d]/g, "")}`;
+
+    setPhoneInputValue(normalizedRaw);
+    updateValue("phone", normalizedRaw);
+
+    const parsed = parsePhoneWithCountries(normalizedRaw);
+    setPhoneCountryIso(parsed.iso);
   }
 
-  function selectedCountryCodesFromNationality(nationality: string) {
-    if (nationality === "Switzerland") return "ch";
-    if (nationality === "Germany") return "de";
-    if (nationality === "Austria") return "at";
-    if (nationality === "France") return "fr";
-    return "ch,de,at,fr";
+  function applyPhoneCountry(nextIso: string) {
+    const selected =
+      phoneCountries.find((country) => country.iso === nextIso) ??
+      PHONE_COUNTRIES[0];
+    const parsed = parsePhoneWithCountries(phoneInputValue);
+    const localDigits = parsed.local.replace(/[^\d]/g, "");
+    const nextValue = `${selected.dial}${localDigits}`;
+    setPhoneCountryIso(selected.iso);
+    setPhoneInputValue(nextValue);
+    updateValue("phone", nextValue);
   }
 
   function applyAddressSuggestion(item: AddressSuggestion) {
@@ -275,9 +268,9 @@ export default function MedicalQuestionnaireContent() {
         if (!cancelled) {
           setValues((prev) => ({ ...initialValues, ...prev }));
           if (initialValues.phone) {
-            const parsed = parsePhoneValue(initialValues.phone);
-            setPhoneCountryDial(parsed.dial);
-            setPhoneLocalValue(parsed.local);
+            const parsed = parsePhoneWithCountries(initialValues.phone);
+            setPhoneCountryIso(parsed.iso);
+            setPhoneInputValue(`${parsed.dial}${parsed.local}`);
           }
         }
       } catch (err: unknown) {
@@ -302,6 +295,59 @@ export default function MedicalQuestionnaireContent() {
   }, [contactId]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadCountries() {
+      try {
+        const res = await fetch("https://restcountries.com/v3.1/all?fields=cca2,name,idd");
+        if (!res.ok) return;
+        const json = (await res.json()) as Array<{
+          cca2?: string;
+          name?: { common?: string };
+          idd?: { root?: string; suffixes?: string[] };
+        }>;
+
+        const parsed: PhoneCountry[] = json
+          .flatMap((item) => {
+            const iso = (item.cca2 ?? "").toUpperCase();
+            const label = item.name?.common ?? iso;
+            const root = item.idd?.root ?? "";
+            const suffixes = item.idd?.suffixes ?? [];
+            if (!iso || !root || !suffixes.length) return [];
+            return suffixes.map((suffix) => ({
+              iso,
+              label,
+              dial: `${root}${suffix}`,
+            }));
+          })
+          .filter((item) => /^\+\d+$/.test(item.dial));
+
+        const unique = new Map<string, PhoneCountry>();
+        for (const entry of [...PHONE_COUNTRIES, ...parsed]) {
+          if (!unique.has(entry.iso)) {
+            unique.set(entry.iso, entry);
+          }
+        }
+
+        const all = [...unique.values()].sort((a, b) =>
+          a.label.localeCompare(b.label, "en")
+        );
+
+        if (!cancelled) {
+          setPhoneCountries(all);
+        }
+      } catch (err) {
+        console.error("Country list load error", err);
+      }
+    }
+
+    void loadCountries();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (step !== 1) return;
     const query = (values.address ?? "").trim();
     if (query.length < 3 || !addressFocused) {
@@ -313,7 +359,7 @@ export default function MedicalQuestionnaireContent() {
     const timeout = setTimeout(async () => {
       try {
         setAddressLoading(true);
-        const countrycodes = selectedCountryCodesFromNationality(values.nationality ?? "");
+        const countrycodes = "ch";
         const url = new URL("https://nominatim.openstreetmap.org/search");
         url.searchParams.set("format", "jsonv2");
         url.searchParams.set("addressdetails", "1");
@@ -341,10 +387,11 @@ export default function MedicalQuestionnaireContent() {
           const street = `${road}${house ? ` ${house}` : ""}`.trim();
           const city =
             item.address?.city ?? item.address?.town ?? item.address?.village ?? "";
+          const zip = item.address?.postcode ?? "";
           return {
-            label: item.display_name ?? street,
+            label: `${street}${zip || city ? ", " : ""}${zip} ${city}`.trim(),
             street: street || item.display_name || "",
-            zip: item.address?.postcode ?? "",
+            zip,
             city,
           };
         });
@@ -358,7 +405,7 @@ export default function MedicalQuestionnaireContent() {
     }, 350);
 
     return () => clearTimeout(timeout);
-  }, [values.address, values.nationality, step, addressFocused]);
+  }, [values.address, step, addressFocused]);
 
   const requiredFieldsByStep = useMemo(() => {
     return currentStepQuestions.filter((q) => q.required);
@@ -375,7 +422,8 @@ export default function MedicalQuestionnaireContent() {
     }
 
     if (step === 1) {
-      const phoneDigits = digitsOnly(phoneLocalValue);
+      const parsed = parsePhoneWithCountries(phoneInputValue);
+      const phoneDigits = digitsOnly(parsed.local);
       if (phoneDigits.length < 7 || phoneDigits.length > 20) {
         nextErrors.phone = tPhoneInvalid;
       }
@@ -469,12 +517,6 @@ export default function MedicalQuestionnaireContent() {
           </div>
         </div>
       </header>
-
-      <section className="card">
-        {introParagraphs.map((paragraph) => (
-          <p key={paragraph} className="intro-paragraph">{paragraph}</p>
-        ))}
-      </section>
 
       <section className="stepper card">
         <div className="stepper-row">
@@ -575,21 +617,21 @@ export default function MedicalQuestionnaireContent() {
                     <div className="phone-row">
                       <select
                         className="select phone-country"
-                        value={phoneCountryDial}
-                        onChange={(e) => updatePhone(e.target.value, phoneLocalValue)}
+                        value={phoneCountryIso}
+                        onChange={(e) => applyPhoneCountry(e.target.value)}
                       >
-                        {PHONE_COUNTRIES.map((country) => (
-                          <option key={country.iso} value={country.dial}>
-                            {country.label} ({country.dial})
+                        {phoneCountries.map((country) => (
+                          <option key={country.iso} value={country.iso}>
+                            {country.iso}
                           </option>
                         ))}
                       </select>
                       <input
                         type="tel"
                         className="input"
-                        value={phoneLocalValue}
-                        onChange={(e) => updatePhone(phoneCountryDial, e.target.value)}
-                        placeholder={language === "de" ? "Telefonnummer" : "Phone number"}
+                        value={phoneInputValue}
+                        onChange={(e) => updatePhoneFromInput(e.target.value)}
+                        placeholder={language === "de" ? "+41..." : "+41..."}
                       />
                     </div>
                     {error && <div className="field-error">{error}</div>}
@@ -660,16 +702,6 @@ export default function MedicalQuestionnaireContent() {
           <p className="declaration-text">{declarationText}</p>
         )}
         <div className="actions form-actions">
-          {step === 1 && (
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => window.history.back()}
-              disabled={loadingContact || savingStep}
-            >
-              {tBack}
-            </button>
-          )}
           {step === 2 && (
             <button
               type="button"
