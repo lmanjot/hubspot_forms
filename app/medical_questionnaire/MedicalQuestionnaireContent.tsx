@@ -12,6 +12,29 @@ import {
 type FormState = Record<string, string>;
 type FormErrors = Record<string, string>;
 
+type PhoneCountry = {
+  iso: string;
+  label: string;
+  dial: string;
+};
+
+type AddressSuggestion = {
+  label: string;
+  street: string;
+  zip: string;
+  city: string;
+};
+
+const PHONE_COUNTRIES: PhoneCountry[] = [
+  { iso: "CH", label: "Switzerland", dial: "+41" },
+  { iso: "DE", label: "Germany", dial: "+49" },
+  { iso: "AT", label: "Austria", dial: "+43" },
+  { iso: "FR", label: "France", dial: "+33" },
+  { iso: "IT", label: "Italy", dial: "+39" },
+  { iso: "GB", label: "United Kingdom", dial: "+44" },
+  { iso: "US", label: "United States", dial: "+1" },
+];
+
 function isLongField(question: QuestionDef) {
   return (
     question.fieldType === "radio" ||
@@ -20,9 +43,45 @@ function isLongField(question: QuestionDef) {
   );
 }
 
+function digitsOnly(input: string) {
+  return input.replace(/\D/g, "");
+}
+
+function normalizeDial(input: string) {
+  if (!input.startsWith("+")) return `+${digitsOnly(input)}`;
+  return `+${digitsOnly(input)}`;
+}
+
+function normalizeLocalPhone(local: string) {
+  return digitsOnly(local).replace(/^0+/, "");
+}
+
+function buildPhoneValue(dial: string, local: string) {
+  const cleanDial = normalizeDial(dial);
+  const cleanLocal = normalizeLocalPhone(local);
+  return `${cleanDial}${cleanLocal}`;
+}
+
+function parsePhoneValue(value: string): { dial: string; local: string } {
+  const compact = value.replace(/[^\d+]/g, "");
+  const sortedCountries = [...PHONE_COUNTRIES].sort(
+    (a, b) => b.dial.length - a.dial.length
+  );
+
+  for (const country of sortedCountries) {
+    if (compact.startsWith(country.dial)) {
+      return {
+        dial: country.dial,
+        local: normalizeLocalPhone(compact.slice(country.dial.length)),
+      };
+    }
+  }
+
+  return { dial: PHONE_COUNTRIES[0].dial, local: normalizeLocalPhone(compact) };
+}
+
 function inputTypeFor(fieldType: QuestionDef["fieldType"]): string {
   if (fieldType === "email") return "email";
-  if (fieldType === "phone") return "tel";
   if (fieldType === "number") return "number";
   if (fieldType === "datepicker") return "date";
   return "text";
@@ -39,8 +98,16 @@ export default function MedicalQuestionnaireContent() {
   const [loadingContact, setLoadingContact] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [savingStep, setSavingStep] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [phoneCountryDial, setPhoneCountryDial] = useState<string>(
+    PHONE_COUNTRIES[0].dial
+  );
+  const [phoneLocalValue, setPhoneLocalValue] = useState<string>("");
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [addressFocused, setAddressFocused] = useState(false);
 
   const contactId = searchParams.get("contact_id") ?? undefined;
 
@@ -76,6 +143,10 @@ export default function MedicalQuestionnaireContent() {
     language === "de"
       ? "Bitte f\u00fcllen Sie dieses Feld aus."
       : "Please complete this field.";
+  const tPhoneInvalid =
+    language === "de"
+      ? "Bitte geben Sie eine g\u00fcltige Telefonnummer ein (7-20 Ziffern)."
+      : "Please enter a valid phone number (7-20 digits).";
   const tGenericError =
     language === "de"
       ? "Beim Speichern ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut."
@@ -88,8 +159,20 @@ export default function MedicalQuestionnaireContent() {
   const tBack = language === "de" ? "Zur\u00fcck" : "Back";
   const tSubmit = language === "de" ? "Fragebogen abschliessen" : "Submit questionnaire";
   const tSaving = language === "de" ? "Wird gespeichert ..." : "Saving...";
+  const tSavingDraft = language === "de" ? "Speichert ..." : "Saving draft...";
   const tLanguage = language === "de" ? "Sprache" : "Language";
   const tStepTitle = language === "de" ? "Schritt" : "Step";
+  const introParagraphs = language === "de"
+    ? [
+        "Dieser medizinische Fragebogen hilft uns, einen individuellen Behandlungsplan f\u00fcr Sie zu erstellen. Wir bitten Sie, ihn sorgf\u00e4ltig auszuf\u00fcllen.",
+        "Ihre Angaben werden ausschlie\u00dflich f\u00fcr medizinische Zwecke verwendet und niemals an Dritte weitergegeben. Wenn Sie es w\u00fcnschen, k\u00f6nnen Sie die L\u00f6schung Ihrer Daten nach Abschluss Ihrer Behandlung beantragen.",
+        "Wir danken Ihnen f\u00fcr Ihr Vertrauen in die Mara Care AG!",
+      ]
+    : [
+        "This medical questionnaire helps us create a personalized treatment plan for you. We kindly ask you to fill it out carefully.",
+        "Your information is used exclusively for medical purposes and is never shared with third parties. If you wish, you can request the deletion of your data after your treatment is complete.",
+        "Thank you for your trust in Mara Care AG!",
+      ];
   const declarationText =
     language === "de"
       ? "Ich best\u00e4tige hiermit, dass die Angaben auf mich zutreffen und wahrheitsgem\u00e4\u00df beantwortet wurden. Mit meiner Unterschrift erm\u00e4chtige ich die Mara Care AG, Informationen und Daten ausschlie\u00dflich zu Behandlungszwecken weiterzugeben."
@@ -105,6 +188,52 @@ export default function MedicalQuestionnaireContent() {
       }
       return next;
     });
+  }
+
+  function updatePhone(nextDial: string, nextLocal: string) {
+    const cleanLocal = normalizeLocalPhone(nextLocal);
+    setPhoneCountryDial(nextDial);
+    setPhoneLocalValue(cleanLocal);
+    updateValue("phone", buildPhoneValue(nextDial, cleanLocal));
+  }
+
+  function selectedCountryCodesFromNationality(nationality: string) {
+    if (nationality === "Switzerland") return "ch";
+    if (nationality === "Germany") return "de";
+    if (nationality === "Austria") return "at";
+    if (nationality === "France") return "fr";
+    return "ch,de,at,fr";
+  }
+
+  function applyAddressSuggestion(item: AddressSuggestion) {
+    updateValue("address", item.street || item.label);
+    if (item.zip) updateValue("zip", item.zip);
+    if (item.city) updateValue("city", item.city);
+    setAddressSuggestions([]);
+    setAddressFocused(false);
+  }
+
+  async function persistDraft() {
+    if (!contactId) return true;
+    try {
+      setSavingStep(true);
+      const res = await fetch("/api/hubspot/contact-form-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values, contactId }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `Request failed: ${res.status}`);
+      }
+      return true;
+    } catch (err) {
+      console.error(err);
+      setSubmitError(tGenericError);
+      return false;
+    } finally {
+      setSavingStep(false);
+    }
   }
 
   useEffect(() => {
@@ -145,6 +274,11 @@ export default function MedicalQuestionnaireContent() {
 
         if (!cancelled) {
           setValues((prev) => ({ ...initialValues, ...prev }));
+          if (initialValues.phone) {
+            const parsed = parsePhoneValue(initialValues.phone);
+            setPhoneCountryDial(parsed.dial);
+            setPhoneLocalValue(parsed.local);
+          }
         }
       } catch (err: unknown) {
         console.error("Contact load error", err);
@@ -167,6 +301,65 @@ export default function MedicalQuestionnaireContent() {
     };
   }, [contactId]);
 
+  useEffect(() => {
+    if (step !== 1) return;
+    const query = (values.address ?? "").trim();
+    if (query.length < 3 || !addressFocused) {
+      setAddressSuggestions([]);
+      setAddressLoading(false);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      try {
+        setAddressLoading(true);
+        const countrycodes = selectedCountryCodesFromNationality(values.nationality ?? "");
+        const url = new URL("https://nominatim.openstreetmap.org/search");
+        url.searchParams.set("format", "jsonv2");
+        url.searchParams.set("addressdetails", "1");
+        url.searchParams.set("limit", "6");
+        url.searchParams.set("countrycodes", countrycodes);
+        url.searchParams.set("q", query);
+
+        const res = await fetch(url.toString());
+        if (!res.ok) return;
+        const json = (await res.json()) as Array<{
+          display_name?: string;
+          address?: {
+            road?: string;
+            house_number?: string;
+            postcode?: string;
+            city?: string;
+            town?: string;
+            village?: string;
+          };
+        }>;
+
+        const suggestions: AddressSuggestion[] = json.map((item) => {
+          const road = item.address?.road ?? "";
+          const house = item.address?.house_number ?? "";
+          const street = `${road}${house ? ` ${house}` : ""}`.trim();
+          const city =
+            item.address?.city ?? item.address?.town ?? item.address?.village ?? "";
+          return {
+            label: item.display_name ?? street,
+            street: street || item.display_name || "",
+            zip: item.address?.postcode ?? "",
+            city,
+          };
+        });
+
+        setAddressSuggestions(suggestions);
+      } catch (err) {
+        console.error("Address autocomplete error", err);
+      } finally {
+        setAddressLoading(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [values.address, values.nationality, step, addressFocused]);
+
   const requiredFieldsByStep = useMemo(() => {
     return currentStepQuestions.filter((q) => q.required);
   }, [currentStepQuestions]);
@@ -181,13 +374,22 @@ export default function MedicalQuestionnaireContent() {
       }
     }
 
+    if (step === 1) {
+      const phoneDigits = digitsOnly(phoneLocalValue);
+      if (phoneDigits.length < 7 || phoneDigits.length > 20) {
+        nextErrors.phone = tPhoneInvalid;
+      }
+    }
+
     return nextErrors;
   }
 
-  function handleNextStep() {
+  async function handleNextStep() {
     const validationErrors = validateCurrentStep();
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return false;
+    const persisted = await persistDraft();
+    if (!persisted) return false;
     setStep(2);
     return true;
   }
@@ -226,9 +428,6 @@ export default function MedicalQuestionnaireContent() {
       <main className="page">
         <div className="page-header">
           <div>
-            <div className="pill">
-              {tLanguage}: <span>{language === "de" ? "DE" : "EN"}</span>
-            </div>
             <h1 className="page-title">{title}</h1>
             <p className="page-subtitle">{tSubmitted}</p>
           </div>
@@ -244,9 +443,6 @@ export default function MedicalQuestionnaireContent() {
     <main className="page">
       <header className="page-header">
         <div>
-          <div className="pill">
-            {tLanguage}: <span>{language === "de" ? "DE" : "EN"}</span>
-          </div>
           <h1 className="page-title">{title}</h1>
           <p className="page-subtitle">{subtitle}</p>
         </div>
@@ -273,6 +469,12 @@ export default function MedicalQuestionnaireContent() {
           </div>
         </div>
       </header>
+
+      <section className="card">
+        {introParagraphs.map((paragraph) => (
+          <p key={paragraph} className="intro-paragraph">{paragraph}</p>
+        ))}
+      </section>
 
       <section className="stepper card">
         <div className="stepper-row">
@@ -362,6 +564,39 @@ export default function MedicalQuestionnaireContent() {
                 );
               }
 
+              if (q.fieldType === "phone") {
+                return (
+                  <div key={fieldKey} className={`field ${isFullWidth ? "grid-full" : ""}`}>
+                    <div className="field-label-row">
+                      <label className="field-label">
+                        {q.label} {q.required && <span className="field-required">*</span>}
+                      </label>
+                    </div>
+                    <div className="phone-row">
+                      <select
+                        className="select phone-country"
+                        value={phoneCountryDial}
+                        onChange={(e) => updatePhone(e.target.value, phoneLocalValue)}
+                      >
+                        {PHONE_COUNTRIES.map((country) => (
+                          <option key={country.iso} value={country.dial}>
+                            {country.label} ({country.dial})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="tel"
+                        className="input"
+                        value={phoneLocalValue}
+                        onChange={(e) => updatePhone(phoneCountryDial, e.target.value)}
+                        placeholder={language === "de" ? "Telefonnummer" : "Phone number"}
+                      />
+                    </div>
+                    {error && <div className="field-error">{error}</div>}
+                  </div>
+                );
+              }
+
               return (
                 <div key={fieldKey} className={`field ${isFullWidth ? "grid-full" : ""}`}>
                   <div className="field-label-row">
@@ -369,12 +604,47 @@ export default function MedicalQuestionnaireContent() {
                       {q.label} {q.required && <span className="field-required">*</span>}
                     </label>
                   </div>
-                  <input
-                    type={inputTypeFor(q.fieldType)}
-                    className="input"
-                    value={value}
-                    onChange={(e) => updateValue(fieldKey, e.target.value)}
-                  />
+                  {fieldKey === "address" ? (
+                    <div className="address-autocomplete">
+                      <input
+                        type={inputTypeFor(q.fieldType)}
+                        className="input"
+                        value={value}
+                        onChange={(e) => updateValue(fieldKey, e.target.value)}
+                        onFocus={() => setAddressFocused(true)}
+                        onBlur={() => {
+                          setTimeout(() => setAddressFocused(false), 120);
+                        }}
+                      />
+                      {addressFocused && addressLoading && (
+                        <div className="address-loading">
+                          {language === "de" ? "Adressen werden geladen..." : "Loading addresses..."}
+                        </div>
+                      )}
+                      {addressFocused && !addressLoading && addressSuggestions.length > 0 && (
+                        <div className="address-suggestions">
+                          {addressSuggestions.map((item) => (
+                            <button
+                              key={`${item.label}-${item.zip}-${item.city}`}
+                              type="button"
+                              className="address-suggestion"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => applyAddressSuggestion(item)}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <input
+                      type={inputTypeFor(q.fieldType)}
+                      className="input"
+                      value={value}
+                      onChange={(e) => updateValue(fieldKey, e.target.value)}
+                    />
+                  )}
                   {error && <div className="field-error">{error}</div>}
                 </div>
               );
@@ -390,6 +660,16 @@ export default function MedicalQuestionnaireContent() {
           <p className="declaration-text">{declarationText}</p>
         )}
         <div className="actions form-actions">
+          {step === 1 && (
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => window.history.back()}
+              disabled={loadingContact || savingStep}
+            >
+              {tBack}
+            </button>
+          )}
           {step === 2 && (
             <button
               type="button"
@@ -404,13 +684,13 @@ export default function MedicalQuestionnaireContent() {
             <button
               type="button"
               className="button button-secondary"
-              onClick={() => {
-                const ok = handleNextStep();
+              onClick={async () => {
+                const ok = await handleNextStep();
                 if (ok) window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              disabled={loadingContact}
+              disabled={loadingContact || savingStep}
             >
-              {tNext}
+              {savingStep ? tSavingDraft : tNext}
             </button>
           )}
           {submitError && (

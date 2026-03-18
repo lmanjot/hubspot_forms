@@ -61,25 +61,6 @@ body {
   font-size: 0.95rem;
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface-soft);
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.pill span {
-  color: var(--brand);
-  font-weight: 600;
-}
-
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -92,6 +73,16 @@ body {
 .card-description {
   color: var(--text-muted);
   margin: 0;
+}
+
+.intro-paragraph {
+  margin: 0 0 10px;
+  color: #36516a;
+  line-height: 1.5;
+}
+
+.intro-paragraph:last-child {
+  margin-bottom: 0;
 }
 
 .stepper-row {
@@ -157,6 +148,58 @@ body {
   background: #fff;
   color: var(--text);
   font-size: 0.92rem;
+}
+
+.phone-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.phone-country {
+  white-space: nowrap;
+}
+
+.address-autocomplete {
+  position: relative;
+}
+
+.address-loading {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.address-suggestions {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 25px rgba(18, 38, 58, 0.15);
+}
+
+.address-suggestion {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: #fff;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--text);
+  border-bottom: 1px solid #edf3f8;
+}
+
+.address-suggestion:last-child {
+  border-bottom: none;
+}
+
+.address-suggestion:hover {
+  background: var(--surface-soft);
 }
 
 .input:focus,
@@ -324,6 +367,10 @@ body {
   }
 
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .phone-row {
     grid-template-columns: 1fr;
   }
 }

@@ -7,6 +7,24 @@ type Payload = {
   contactId?: string;
 };
 
+function normalizePhoneForHubSpot(phone: string) {
+  let normalized = phone.replace(/[^\d+]/g, "");
+  if (!normalized.startsWith("+")) {
+    normalized = `+${normalized.replace(/\+/g, "")}`;
+  }
+
+  const countryCodes = ["41", "49", "43", "33", "39", "44", "1"];
+  for (const cc of countryCodes) {
+    const prefix = `+${cc}`;
+    if (normalized.startsWith(prefix)) {
+      const rest = normalized.slice(prefix.length).replace(/^0+/, "");
+      return `${prefix}${rest}`;
+    }
+  }
+
+  return normalized;
+}
+
 function buildContactProperties(values: Record<string, string>): Record<string, string> {
   const properties: Record<string, string> = {};
 
@@ -14,6 +32,13 @@ function buildContactProperties(values: Record<string, string>): Record<string, 
     if (typeof value === "string") {
       properties[key] = value;
     }
+  }
+
+  if (typeof properties.phone === "string" && properties.phone.trim().length > 0) {
+    const normalizedPhone = normalizePhoneForHubSpot(properties.phone);
+    properties.phone = normalizedPhone;
+    properties.mobilephone = normalizedPhone;
+    properties.mobilephonenumber = normalizedPhone;
   }
 
   return properties;
