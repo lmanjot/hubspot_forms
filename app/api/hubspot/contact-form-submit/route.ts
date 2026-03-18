@@ -17,8 +17,8 @@ function normalizePhoneForHubSpot(phone: string) {
   for (const cc of countryCodes) {
     const prefix = `+${cc}`;
     if (normalized.startsWith(prefix)) {
-      // Keep leading zeros in the national part (users may type +41 0xxxx).
-      const rest = normalized.slice(prefix.length);
+      // Strip a leading 0 in the national part (e.g. +41 0xxx -> +41xxx).
+      const rest = normalized.slice(prefix.length).replace(/^0+/, "");
       return `${prefix}${rest}`;
     }
   }
