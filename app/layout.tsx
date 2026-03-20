@@ -2,7 +2,7 @@ import "./globals.css";
 import type { ReactNode } from "react";
 
 export const metadata = {
-  title: "HubSpot Forms",
+  title: "Māra",
   description: "Custom HubSpot forms (e.g. medical questionnaire)",
 };
 

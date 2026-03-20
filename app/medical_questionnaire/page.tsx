@@ -1,23 +1,19 @@
-"use client";
+import type { Metadata } from "next";
+import MedicalQuestionnaireClient from "./MedicalQuestionnaireClient";
 
-import { Suspense } from "react";
-import MedicalQuestionnaireContent from "./MedicalQuestionnaireContent";
+type Props = {
+  searchParams: { lang?: string };
+};
 
-function Fallback() {
-  return (
-    <main className="page">
-      <div className="page-header">
-        <h1 className="page-title">Medical Questionnaire</h1>
-        <p className="page-subtitle">Loading…</p>
-      </div>
-    </main>
-  );
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const { lang } = searchParams;
+  const title =
+    lang === "de"
+      ? "Māra – Medizinischer Fragebogen"
+      : "Māra – Medical Questionnaire";
+  return { title };
 }
 
 export default function MedicalQuestionnairePage() {
-  return (
-    <Suspense fallback={<Fallback />}>
-      <MedicalQuestionnaireContent />
-    </Suspense>
-  );
+  return <MedicalQuestionnaireClient />;
 }
