@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  formatBirthdateDigits,
+  applyBirthdateEdit,
+  birthdateTemplateSuffix,
   hubspotBirthdateToDdMmYyyy,
   parseDdMmYyyy,
 } from "./birthdate";
@@ -734,6 +735,8 @@ export default function MedicalQuestionnaireContent() {
               }
 
               if (q.fieldType === "datepicker") {
+                const digitLen = digitsOnly(value).length;
+                const hint = birthdateTemplateSuffix(digitLen);
                 return (
                   <div key={fieldKey} className={`field ${isFullWidth ? "grid-full" : ""}`}>
                     <div className="field-label-row">
@@ -741,18 +744,27 @@ export default function MedicalQuestionnaireContent() {
                         {q.label} {q.required && <span className="field-required">*</span>}
                       </label>
                     </div>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="bday"
-                      className="input"
-                      placeholder="DD-MM-YYYY"
-                      maxLength={10}
-                      value={value}
-                      onChange={(e) =>
-                        updateValue(fieldKey, formatBirthdateDigits(e.target.value))
-                      }
-                    />
+                    <div className="birthdate-input-wrap">
+                      <div className="birthdate-input-display" aria-hidden>
+                        {value.length > 0 && (
+                          <span className="birthdate-input-filled">{value}</span>
+                        )}
+                        {hint.length > 0 && (
+                          <span className="birthdate-input-hint">{hint}</span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="bday"
+                        className="input birthdate-input-control"
+                        maxLength={10}
+                        value={value}
+                        onChange={(e) =>
+                          updateValue(fieldKey, applyBirthdateEdit(value, e.target.value))
+                        }
+                      />
+                    </div>
                     {error && <div className="field-error">{error}</div>}
                   </div>
                 );
