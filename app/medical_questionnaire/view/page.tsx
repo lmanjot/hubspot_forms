@@ -1,3 +1,4 @@
+import { hubspotBirthdateToDdMmYyyy } from "../birthdate";
 import { MEDICAL_QUESTIONNAIRE_SCHEMA, ALL_MEDICAL_FIELD_NAMES, type Language, type QuestionDef } from "../schema";
 
 const HUBSPOT_BASE = "https://api.hubapi.com";
@@ -136,7 +137,9 @@ export default async function MedicalQuestionnaireViewPage({
             const isAffirmative = q.fieldType === "radio" && rawValue === "true";
             const displayValue =
               rawValue.trim().length > 0
-                ? mapDisplayValue(q, rawValue)
+                ? q.fieldType === "datepicker"
+                  ? hubspotBirthdateToDdMmYyyy(rawValue)
+                  : mapDisplayValue(q, rawValue)
                 : "—";
             return (
               <div
@@ -166,7 +169,9 @@ export default async function MedicalQuestionnaireViewPage({
             const isAffirmative = q.fieldType === "radio" && rawValue === "true";
             const displayValue =
               rawValue.trim().length > 0
-                ? mapDisplayValue(q, rawValue)
+                ? q.fieldType === "datepicker"
+                  ? hubspotBirthdateToDdMmYyyy(rawValue)
+                  : mapDisplayValue(q, rawValue)
                 : "—";
             return (
               <div

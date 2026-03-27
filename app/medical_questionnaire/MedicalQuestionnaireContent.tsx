@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  formatBirthdateDigits,
+  hubspotBirthdateToDdMmYyyy,
+  parseDdMmYyyy,
+} from "./birthdate";
+import {
   ALL_MEDICAL_FIELD_NAMES,
   MEDICAL_QUESTIONNAIRE_SCHEMA,
   type Language,
@@ -52,7 +57,6 @@ function digitsOnly(input: string) {
 function inputTypeFor(fieldType: QuestionDef["fieldType"]): string {
   if (fieldType === "email") return "email";
   if (fieldType === "number") return "number";
-  if (fieldType === "datepicker") return "date";
   return "text";
 }
 
@@ -162,6 +166,10 @@ export default function MedicalQuestionnaireContent() {
     language === "de"
       ? "Bitte geben Sie eine g\u00fcltige Telefonnummer ein (7-20 Ziffern)."
       : "Please enter a valid phone number (7-20 digits).";
+  const tBirthdateInvalid =
+    language === "de"
+      ? "Bitte geben Sie ein g\u00fcltiges Datum ein (TT-MM-JJJJ)."
+      : "Please enter a valid date (DD-MM-YYYY).";
   const tGenericError =
     language === "de"
       ? "Beim Speichern ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut."
@@ -290,7 +298,9 @@ export default function MedicalQuestionnaireContent() {
         for (const name of ALL_MEDICAL_FIELD_NAMES) {
           const value = props[name];
           if (value !== null && value !== undefined) {
-            initialValues[name] = String(value);
+            let s = String(value);
+            if (name === "birthdate") s = hubspotBirthdateToDdMmYyyy(s);
+            initialValues[name] = s;
           }
         }
 
@@ -512,6 +522,15 @@ export default function MedicalQuestionnaireContent() {
       }
     }
 
+    for (const field of currentStepQuestions) {
+      if (field.fieldType !== "datepicker") continue;
+      const v = (values[field.name] ?? "").trim();
+      if (v.length === 0) continue;
+      if (!parseDdMmYyyy(v)) {
+        nextErrors[field.name] = tBirthdateInvalid;
+      }
+    }
+
     if (step === 1) {
       const parsed = parsePhoneWithCountries(phoneInputValue);
       const phoneDigits = digitsOnly(parsed.local);
@@ -709,6 +728,31 @@ export default function MedicalQuestionnaireContent() {
                         </option>
                       ))}
                     </select>
+                    {error && <div className="field-error">{error}</div>}
+                  </div>
+                );
+              }
+
+              if (q.fieldType === "datepicker") {
+                return (
+                  <div key={fieldKey} className={`field ${isFullWidth ? "grid-full" : ""}`}>
+                    <div className="field-label-row">
+                      <label className="field-label">
+                        {q.label} {q.required && <span className="field-required">*</span>}
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="bday"
+                      className="input"
+                      placeholder="DD-MM-YYYY"
+                      maxLength={10}
+                      value={value}
+                      onChange={(e) =>
+                        updateValue(fieldKey, formatBirthdateDigits(e.target.value))
+                      }
+                    />
                     {error && <div className="field-error">{error}</div>}
                   </div>
                 );

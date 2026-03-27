@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { normalizeBirthdateForHubSpot } from "../../../medical_questionnaire/birthdate";
 import type { Language } from "../../../medical_questionnaire/schema";
 
 const HUBSPOT_BASE = "https://api.hubapi.com";
@@ -43,6 +44,10 @@ function buildContactProperties(values: Record<string, string>): Record<string, 
     const normalizedPhone = normalizePhoneForHubSpot(properties.phone);
     properties.phone = normalizedPhone;
     properties.mobilephone = normalizedPhone;
+  }
+
+  if (typeof properties.birthdate === "string" && properties.birthdate.trim().length > 0) {
+    properties.birthdate = normalizeBirthdateForHubSpot(properties.birthdate);
   }
 
   return properties;
