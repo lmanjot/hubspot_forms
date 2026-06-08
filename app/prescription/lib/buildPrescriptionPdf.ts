@@ -301,7 +301,7 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
     y -= blockHeight + 10;
   }
 
-  const signatureY = (MARGIN + 36) * 1.3 * 1.3;
+  const signatureY = (MARGIN + 36) * 1.3 * 1.3 + 100;
   page.drawText(DOCTOR.name, {
     x: COL_DOSIERUNG_X,
     y: signatureY,

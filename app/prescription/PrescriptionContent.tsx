@@ -13,6 +13,7 @@ import type {
   PrescriptionCreatedBy,
   PrescriptionHistoryEntry,
 } from "./types";
+import { normalizeCreatedByInput } from "./lib/hubspotUser";
 
 const EMPTY_MEDICATION: MedicationRow = { name: "", usage: "", remarks: "" };
 
@@ -142,20 +143,19 @@ function HistoryRow({
   );
 }
 
+function getCreatedByFromSearchParams(searchParams: {
+  get(name: string): string | null;
+}): PrescriptionCreatedBy | undefined {
+  return normalizeCreatedByInput({
+    id: searchParams.get("hs_user_id") ?? undefined,
+    email: searchParams.get("hs_user_email") ?? undefined,
+    name: searchParams.get("hs_user_name") ?? undefined,
+  });
+}
+
 export default function PrescriptionContent() {
   const searchParams = useSearchParams();
   const contactId = searchParams.get("contact_id") ?? undefined;
-  const createdBy: PrescriptionCreatedBy | undefined = (() => {
-    const id = searchParams.get("hs_user_id")?.trim();
-    if (!id) return undefined;
-    const email = searchParams.get("hs_user_email")?.trim();
-    const name = searchParams.get("hs_user_name")?.trim();
-    return {
-      id,
-      ...(email ? { email } : {}),
-      ...(name ? { name } : {}),
-    };
-  })();
 
   const [patient, setPatient] = useState<PatientInfo | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -255,7 +255,12 @@ export default function PrescriptionContent() {
       const res = await fetch("/api/prescription/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactId, diagnosis, medications, createdBy }),
+        body: JSON.stringify({
+          contactId,
+          diagnosis,
+          medications,
+          createdBy: getCreatedByFromSearchParams(searchParams),
+        }),
       });
 
       if (!res.ok) {
