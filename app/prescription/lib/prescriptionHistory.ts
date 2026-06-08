@@ -1,4 +1,4 @@
-import type { PrescriptionHistoryEntry } from "../types";
+import type { PrescriptionCreatedBy, PrescriptionHistoryEntry } from "../types";
 
 export const PRESCRIPTION_JSON_PROPERTY = "prescription_json";
 
@@ -18,6 +18,12 @@ export function parsePrescriptionHistory(raw: unknown): PrescriptionHistoryEntry
   return [];
 }
 
+function isValidCreatedBy(value: unknown): value is PrescriptionCreatedBy {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.id === "string" && record.id.trim().length > 0;
+}
+
 function isValidEntry(value: unknown): value is PrescriptionHistoryEntry {
   if (!value || typeof value !== "object") return false;
   const entry = value as Record<string, unknown>;
@@ -27,7 +33,8 @@ function isValidEntry(value: unknown): value is PrescriptionHistoryEntry {
     typeof entry.fileId === "string" &&
     typeof entry.filename === "string" &&
     typeof entry.diagnosis === "string" &&
-    Array.isArray(entry.medications)
+    Array.isArray(entry.medications) &&
+    (entry.createdBy === undefined || isValidCreatedBy(entry.createdBy))
   );
 }
 

@@ -4,6 +4,12 @@ export type MedicationRow = {
   remarks: string;
 };
 
+export type PrescriptionCreatedBy = {
+  id: string;
+  email?: string;
+  name?: string;
+};
+
 export type PrescriptionHistoryEntry = {
   id: string;
   createdAt: string;
@@ -15,6 +21,7 @@ export type PrescriptionHistoryEntry = {
     usage?: string;
     remarks?: string;
   }[];
+  createdBy?: PrescriptionCreatedBy;
 };
 
 export type PatientInfo = {

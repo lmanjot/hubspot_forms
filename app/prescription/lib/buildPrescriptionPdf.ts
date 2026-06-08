@@ -106,6 +106,23 @@ function drawRightBlock(
   return y;
 }
 
+function drawRightLine(
+  page: PDFPage,
+  text: string,
+  y: number,
+  font: PDFFont,
+  size: number
+): void {
+  const width = textWidth(font, text, size);
+  page.drawText(text, {
+    x: PAGE_WIDTH - MARGIN - width,
+    y,
+    size,
+    font,
+    color: rgb(0, 0, 0),
+  });
+}
+
 function drawCentered(
   page: PDFPage,
   text: string,
@@ -150,12 +167,12 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
     DOCTOR.gln,
   ];
 
-  const patientLines = [
+  const patientDetailLines = [
     `Patient: ${patientName}`,
     ...(patientAddress ? [`Adresse: ${patientAddress}`] : []),
     `Geburtsdatum: ${birthdate}`,
-    `Zürich, ${formatSwissDate(issued)}`,
   ];
+  const dateLine = `Zürich, ${formatSwissDate(issued)}`;
 
   const leftBottom = drawLeftBlock(
     page,
@@ -167,14 +184,18 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
   );
 
   const patientStartY = leftBottom - 12;
-  const rightBottom = drawRightBlock(
+  let rightBottom = drawRightBlock(
     page,
-    patientLines,
+    patientDetailLines,
     patientStartY,
     regular,
     bodySize,
     bodyGap
   );
+
+  rightBottom -= 22;
+  drawRightLine(page, dateLine, rightBottom, regular, bodySize);
+  rightBottom -= bodyGap;
 
   let y = rightBottom - 28;
   drawCentered(page, "REZEPT", y, bold, 18);
@@ -279,9 +300,10 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
     y -= blockHeight + 10;
   }
 
-  page.drawText("Unterschrift und Stempel", {
+  const signatureY = (MARGIN + 36) * 1.3;
+  page.drawText(DOCTOR.name, {
     x: MARGIN,
-    y: MARGIN + 36,
+    y: signatureY,
     size: 10.5,
     font: regular,
     color: black,

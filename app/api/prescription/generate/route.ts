@@ -11,7 +11,7 @@ import {
   appendPrescriptionHistory,
   parsePrescriptionHistory,
 } from "../../../prescription/lib/prescriptionHistory";
-import type { MedicationRow, PrescriptionHistoryEntry } from "../../../prescription/types";
+import type { MedicationRow, PrescriptionCreatedBy, PrescriptionHistoryEntry } from "../../../prescription/types";
 
 const HUBSPOT_BASE = "https://api.hubapi.com";
 
@@ -29,7 +29,28 @@ type GenerateBody = {
   contactId?: string;
   diagnosis?: string;
   medications?: { name?: string; usage?: string; remarks?: string }[];
+  createdBy?: {
+    id?: string;
+    email?: string;
+    name?: string;
+  };
 };
+
+function normalizeCreatedBy(
+  raw: GenerateBody["createdBy"]
+): PrescriptionCreatedBy | undefined {
+  const id = raw?.id?.trim();
+  if (!id) return undefined;
+
+  const email = raw?.email?.trim();
+  const name = raw?.name?.trim();
+
+  return {
+    id,
+    ...(email ? { email } : {}),
+    ...(name ? { name } : {}),
+  };
+}
 
 function normalizeMedications(
   raw: GenerateBody["medications"]
@@ -69,6 +90,7 @@ export async function POST(req: NextRequest) {
   const contactId = body.contactId?.trim();
   const diagnosis = body.diagnosis?.trim();
   const medications = normalizeMedications(body.medications);
+  const createdBy = normalizeCreatedBy(body.createdBy);
 
   if (!contactId) {
     return NextResponse.json({ error: "Missing contactId" }, { status: 400 });
@@ -129,6 +151,7 @@ export async function POST(req: NextRequest) {
         ...(m.usage ? { usage: m.usage } : {}),
         ...(m.remarks ? { remarks: m.remarks } : {}),
       })),
+      ...(createdBy ? { createdBy } : {}),
     };
 
     const existing = parsePrescriptionHistory(props[PRESCRIPTION_JSON_PROPERTY]);

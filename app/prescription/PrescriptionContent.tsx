@@ -10,6 +10,7 @@ import {
 import type {
   MedicationRow,
   PatientInfo,
+  PrescriptionCreatedBy,
   PrescriptionHistoryEntry,
 } from "./types";
 
@@ -40,6 +41,12 @@ function diagnosisPreview(text: string): string {
   return first?.trim() ?? "";
 }
 
+function formatCreator(entry: HistoryEntry): string | null {
+  const creator = entry.createdBy;
+  if (!creator) return null;
+  return creator.name || creator.email || creator.id;
+}
+
 function HistoryRow({
   entry,
   onCopy,
@@ -50,8 +57,10 @@ function HistoryRow({
   const [expanded, setExpanded] = useState(false);
   const preview = diagnosisPreview(entry.diagnosis);
   const medCount = entry.medications.length;
+  const creator = formatCreator(entry);
   const summary = [
     formatHistoryDateShort(entry.createdAt),
+    creator,
     preview,
     `${medCount} ${medCount === 1 ? "Medikament" : "Medikamente"}`,
   ]
@@ -75,6 +84,15 @@ function HistoryRow({
 
         {expanded && (
           <div className="history-item-expanded">
+            {entry.createdBy && (
+              <div className="history-expanded-block">
+                <span className="history-expanded-label">Erstellt von</span>
+                <p className="history-expanded-text">
+                  {[entry.createdBy.name, entry.createdBy.email].filter(Boolean).join(" · ") ||
+                    entry.createdBy.id}
+                </p>
+              </div>
+            )}
             {entry.diagnosis.includes("\n") && (
               <div className="history-expanded-block">
                 <span className="history-expanded-label">Diagnose</span>
@@ -127,6 +145,17 @@ function HistoryRow({
 export default function PrescriptionContent() {
   const searchParams = useSearchParams();
   const contactId = searchParams.get("contact_id") ?? undefined;
+  const createdBy: PrescriptionCreatedBy | undefined = (() => {
+    const id = searchParams.get("hs_user_id")?.trim();
+    if (!id) return undefined;
+    const email = searchParams.get("hs_user_email")?.trim();
+    const name = searchParams.get("hs_user_name")?.trim();
+    return {
+      id,
+      ...(email ? { email } : {}),
+      ...(name ? { name } : {}),
+    };
+  })();
 
   const [patient, setPatient] = useState<PatientInfo | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -226,7 +255,7 @@ export default function PrescriptionContent() {
       const res = await fetch("/api/prescription/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactId, diagnosis, medications }),
+        body: JSON.stringify({ contactId, diagnosis, medications, createdBy }),
       });
 
       if (!res.ok) {

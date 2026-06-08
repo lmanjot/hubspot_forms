@@ -20,7 +20,7 @@ HubSpot setup (one-time):
 - Create contact property **`prescription_json`** (multi-line text) to store prescription history as JSON.
 - Ensure `HUBSPOT_TOKEN` has scopes: `crm.objects.contacts.read`, `crm.objects.contacts.write`, and `files`.
 
-Flow: Contact Actions card opens `/prescription?contact_id=...`. The form shows past prescriptions, lets the doctor create a new one, downloads the PDF, uploads the file to HubSpot Files, and appends metadata to `prescription_json`.
+Flow: Contact Actions card opens `/prescription?contact_id=...&hs_user_id=...&hs_user_email=...&hs_user_name=...`. The form shows past prescriptions, lets the doctor create a new one, downloads the PDF, uploads the file to HubSpot Files, and appends metadata (including `createdBy`) to `prescription_json`.
 
 ## Stored Form Schema
 
