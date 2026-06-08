@@ -646,6 +646,104 @@ body {
   font-size: 0.92rem;
 }
 
+.card-compact {
+  padding: 14px 16px;
+}
+
+.section-title-compact {
+  margin-bottom: 8px;
+  font-size: 0.98rem;
+}
+
+.card-description-compact {
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.history-list-compact {
+  gap: 6px;
+}
+
+.history-item-compact {
+  padding: 0;
+  background: #fff;
+}
+
+.history-item-inner {
+  width: 100%;
+}
+
+.history-item-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.history-item-summary:hover {
+  background: var(--surface-soft);
+  border-radius: 8px;
+}
+
+.history-item-summary-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.84rem;
+  color: var(--text);
+}
+
+.history-toggle {
+  flex-shrink: 0;
+  width: 18px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.history-item-expanded {
+  padding: 0 10px 10px;
+  font-size: 0.84rem;
+}
+
+.history-expanded-block {
+  margin-bottom: 10px;
+}
+
+.history-expanded-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.history-expanded-text {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.history-med-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .history-list {
   list-style: none;
   margin: 0;
@@ -656,31 +754,17 @@ body {
 }
 
 .history-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface-soft);
 }
 
-.history-item-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.history-item-diagnosis {
-  color: var(--text);
-  font-size: 0.92rem;
-}
-
 .history-download {
+  display: inline-flex;
   text-decoration: none;
   white-space: nowrap;
+  padding: 7px 12px;
+  font-size: 0.82rem;
 }
 
 .medications-section {
@@ -735,10 +819,35 @@ body {
   background: #f4fbf7;
 }
 
-.prescription-completed-link {
-  display: inline-flex;
+.prescription-completed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.prescription-completed-actions .button {
+  width: auto;
+  min-width: 0;
+  padding: 10px 16px;
   text-decoration: none;
-  margin-top: 8px;
+}
+
+.prescription-completed-actions .button-primary {
+  background: linear-gradient(135deg, var(--brand), #0a9396);
+  color: #fff;
+  border-color: transparent;
+}
+
+.prescription-completed-actions .button-secondary {
+  background: #fff;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.prescription-completed-fallback {
+  margin: 0;
 }
 
 .status-success {
@@ -747,8 +856,14 @@ body {
 }
 
 @media (max-width: 860px) {
-  .history-item {
+  .prescription-completed-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .prescription-completed-actions .button {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
   }
 }

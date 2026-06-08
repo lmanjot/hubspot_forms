@@ -165,16 +165,18 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
     bodySize,
     bodyGap
   );
+
+  const patientStartY = leftBottom - 12;
   const rightBottom = drawRightBlock(
     page,
     patientLines,
-    headerTop,
+    patientStartY,
     regular,
     bodySize,
     bodyGap
   );
 
-  let y = Math.min(leftBottom, rightBottom) - 28;
+  let y = rightBottom - 28;
   drawCentered(page, "REZEPT", y, bold, 18);
   y -= 48;
 

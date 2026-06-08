@@ -21,7 +21,9 @@ type CompletedPrescription = {
   downloadUrl: string | null;
 };
 
-function formatHistoryDate(iso: string): string {
+type HistoryEntry = PrescriptionHistoryEntry & { downloadUrl: string | null };
+
+function formatHistoryDateShort(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return date.toLocaleString("de-CH", {
@@ -38,14 +40,82 @@ function diagnosisPreview(text: string): string {
   return first?.trim() ?? "";
 }
 
+function HistoryRow({ entry }: { entry: HistoryEntry }) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = diagnosisPreview(entry.diagnosis);
+  const medCount = entry.medications.length;
+  const summary = [
+    formatHistoryDateShort(entry.createdAt),
+    preview,
+    `${medCount} ${medCount === 1 ? "Medikament" : "Medikamente"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <li className="history-item history-item-compact">
+      <div className="history-item-inner">
+        <button
+          type="button"
+          className="history-item-summary"
+          onClick={() => setExpanded((open) => !open)}
+          aria-expanded={expanded}
+        >
+          <span className="history-item-summary-text">{summary}</span>
+          <span className="history-toggle" aria-hidden>
+            {expanded ? "▾" : "▸"}
+          </span>
+        </button>
+
+        {expanded && (
+          <div className="history-item-expanded">
+            {entry.diagnosis.includes("\n") && (
+              <div className="history-expanded-block">
+                <span className="history-expanded-label">Diagnose</span>
+                <p className="history-expanded-text">{entry.diagnosis}</p>
+              </div>
+            )}
+            <div className="history-expanded-block">
+              <span className="history-expanded-label">Medikamente</span>
+              <ul className="history-med-list">
+                {entry.medications.map((med, index) => (
+                  <li key={`${entry.id}-${index}`}>
+                    <strong>{med.name}</strong>
+                    {[med.usage, med.remarks].filter(Boolean).length > 0 && (
+                      <span className="status-muted">
+                        {" "}
+                        · {[med.usage, med.remarks].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {entry.downloadUrl ? (
+              <a
+                className="button button-secondary history-download"
+                href={entry.downloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                PDF herunterladen
+              </a>
+            ) : (
+              <span className="status-muted">Download nicht verfügbar</span>
+            )}
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
 export default function PrescriptionContent() {
   const searchParams = useSearchParams();
   const contactId = searchParams.get("contact_id") ?? undefined;
 
   const [patient, setPatient] = useState<PatientInfo | null>(null);
-  const [history, setHistory] = useState<
-    Array<PrescriptionHistoryEntry & { downloadUrl: string | null }>
-  >([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -71,9 +141,7 @@ export default function PrescriptionContent() {
       }
       setPatient(json.patient ?? null);
       setHistory(json.prescriptions ?? []);
-      return json.prescriptions as Array<
-        PrescriptionHistoryEntry & { downloadUrl: string | null }
-      >;
+      return json.prescriptions as HistoryEntry[];
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Fehler beim Laden");
       return null;
@@ -187,40 +255,19 @@ export default function PrescriptionContent() {
         </div>
       </header>
 
-      <section className="card">
-        <h2 className="section-title">Bisherige Rezepte</h2>
+      <section className="card card-compact">
+        <h2 className="section-title section-title-compact">Bisherige Rezepte</h2>
         {loading && <p className="card-description">Wird geladen…</p>}
         {loadError && <p className="status-error">{loadError}</p>}
         {!loading && !loadError && history.length === 0 && (
-          <p className="card-description">Noch keine Rezepte vorhanden.</p>
+          <p className="card-description card-description-compact">
+            Noch keine Rezepte vorhanden.
+          </p>
         )}
         {!loading && history.length > 0 && (
-          <ul className="history-list">
+          <ul className="history-list history-list-compact">
             {history.map((entry) => (
-              <li key={entry.id} className="history-item">
-                <div className="history-item-main">
-                  <strong>{formatHistoryDate(entry.createdAt)}</strong>
-                  <span className="history-item-diagnosis">
-                    {diagnosisPreview(entry.diagnosis)}
-                  </span>
-                  <span className="status-muted">
-                    {entry.medications.length}{" "}
-                    {entry.medications.length === 1 ? "Medikament" : "Medikamente"}
-                  </span>
-                </div>
-                {entry.downloadUrl ? (
-                  <a
-                    className="button button-secondary history-download"
-                    href={entry.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Herunterladen
-                  </a>
-                ) : (
-                  <span className="status-muted">Download nicht verfügbar</span>
-                )}
-              </li>
+              <HistoryRow key={entry.id} entry={entry} />
             ))}
           </ul>
         )}
@@ -232,24 +279,25 @@ export default function PrescriptionContent() {
           <p className="card-description">
             Das Rezept wurde gespeichert und heruntergeladen.
           </p>
-          {completed.downloadUrl ? (
-            <a
-              className="button button-nav button-primary prescription-completed-link"
-              href={completed.downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              PDF öffnen ({completed.filename})
-            </a>
-          ) : (
-            <p className="status-muted">
-              PDF gespeichert. Download-Link wird in Kürze in der Liste oben verfügbar sein.
-            </p>
-          )}
-          <div className="actions form-actions">
+          <div className="prescription-completed-actions">
+            {completed.downloadUrl ? (
+              <a
+                className="button button-primary"
+                href={completed.downloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                PDF öffnen
+              </a>
+            ) : (
+              <p className="status-muted prescription-completed-fallback">
+                PDF gespeichert. Download-Link wird in Kürze in der Liste oben
+                verfügbar sein.
+              </p>
+            )}
             <button
               type="button"
-              className="button button-nav button-secondary"
+              className="button button-secondary"
               onClick={startNewPrescription}
             >
               Neues Rezept erstellen
