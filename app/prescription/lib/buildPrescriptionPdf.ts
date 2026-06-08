@@ -23,6 +23,7 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
 const COL_MEDIKAMENT = 230;
 const COL_DOSIERUNG = 105;
+const COL_DOSIERUNG_X = MARGIN + COL_MEDIKAMENT;
 const COL_BEMERKUNG = CONTENT_WIDTH - COL_MEDIKAMENT - COL_DOSIERUNG;
 
 type BuildPdfInput = {
@@ -230,7 +231,7 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
     color: black,
   });
   page.drawText("Dosierung", {
-    x: MARGIN + COL_MEDIKAMENT,
+    x: COL_DOSIERUNG_X,
     y: headerY,
     size: headerSize,
     font: bold,
@@ -279,7 +280,7 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
       }
       if (usageLines[i]) {
         page.drawText(usageLines[i], {
-          x: MARGIN + COL_MEDIKAMENT,
+          x: COL_DOSIERUNG_X,
           y: lineY,
           size: 10,
           font: regular,
@@ -300,9 +301,9 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
     y -= blockHeight + 10;
   }
 
-  const signatureY = (MARGIN + 36) * 1.3;
+  const signatureY = (MARGIN + 36) * 1.3 * 1.3;
   page.drawText(DOCTOR.name, {
-    x: MARGIN,
+    x: COL_DOSIERUNG_X,
     y: signatureY,
     size: 10.5,
     font: regular,
