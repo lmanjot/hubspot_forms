@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { MedicationRow, PatientInfo } from "../types";
 import {
   formatBirthdateForDisplay,
@@ -16,13 +16,13 @@ const DOCTOR = {
   gln: "GLN: 7601002825023",
 };
 
-const MARGIN = 50;
+const MARGIN = 56;
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
-const COL_MEDIKAMENT = 240;
-const COL_DOSIERUNG = 110;
+const COL_MEDIKAMENT = 230;
+const COL_DOSIERUNG = 105;
 const COL_BEMERKUNG = CONTENT_WIDTH - COL_MEDIKAMENT - COL_DOSIERUNG;
 
 type BuildPdfInput = {
@@ -32,7 +32,16 @@ type BuildPdfInput = {
   issuedAt?: Date;
 };
 
-function wrapText(text: string, maxWidth: number, fontSize: number): string[] {
+function textWidth(font: PDFFont, text: string, size: number): number {
+  return font.widthOfTextAtSize(text, size);
+}
+
+function wrapText(
+  text: string,
+  maxWidth: number,
+  font: PDFFont,
+  fontSize: number
+): string[] {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length === 0) return [""];
 
@@ -41,7 +50,7 @@ function wrapText(text: string, maxWidth: number, fontSize: number): string[] {
 
   for (let i = 1; i < words.length; i += 1) {
     const next = `${current} ${words[i]}`;
-    if (next.length * (fontSize * 0.5) <= maxWidth) {
+    if (textWidth(font, next, fontSize) <= maxWidth) {
       current = next;
     } else {
       lines.push(current);
@@ -56,64 +65,138 @@ function splitLines(text: string): string[] {
   return text.split(/\r?\n/).flatMap((line) => (line.trim() ? [line.trim()] : []));
 }
 
+function drawLeftBlock(
+  page: PDFPage,
+  lines: string[],
+  startY: number,
+  font: PDFFont,
+  size: number,
+  lineGap: number
+): number {
+  let y = startY;
+  const black = rgb(0, 0, 0);
+  for (const line of lines) {
+    page.drawText(line, { x: MARGIN, y, size, font, color: black });
+    y -= lineGap;
+  }
+  return y;
+}
+
+function drawRightBlock(
+  page: PDFPage,
+  lines: string[],
+  startY: number,
+  font: PDFFont,
+  size: number,
+  lineGap: number
+): number {
+  let y = startY;
+  const black = rgb(0, 0, 0);
+  for (const line of lines) {
+    const width = textWidth(font, line, size);
+    page.drawText(line, {
+      x: PAGE_WIDTH - MARGIN - width,
+      y,
+      size,
+      font,
+      color: black,
+    });
+    y -= lineGap;
+  }
+  return y;
+}
+
+function drawCentered(
+  page: PDFPage,
+  text: string,
+  y: number,
+  font: PDFFont,
+  size: number
+): number {
+  const black = rgb(0, 0, 0);
+  const width = textWidth(font, text, size);
+  page.drawText(text, {
+    x: (PAGE_WIDTH - width) / 2,
+    y,
+    size,
+    font,
+    color: black,
+  });
+  return y;
+}
+
 export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-  let y = PAGE_HEIGHT - MARGIN;
   const black = rgb(0, 0, 0);
 
-  const drawLine = (
-    text: string,
-    opts: { size?: number; font?: typeof regular; gap?: number } = {}
-  ) => {
-    const size = opts.size ?? 11;
-    const font = opts.font ?? regular;
-    const gap = opts.gap ?? size + 4;
-    page.drawText(text, { x: MARGIN, y, size, font, color: black });
-    y -= gap;
-  };
+  const issued = input.issuedAt ?? new Date();
+  const patientName = formatPatientName(input.patient);
+  const patientAddress = formatPatientAddress(input.patient);
+  const birthdate = formatBirthdateForDisplay(input.patient.birthdate);
 
-  for (const line of [
+  const headerTop = PAGE_HEIGHT - MARGIN;
+  const bodySize = 10.5;
+  const bodyGap = 15;
+
+  const doctorLines = [
     DOCTOR.name,
     DOCTOR.title,
     DOCTOR.company,
     DOCTOR.street,
     DOCTOR.city,
     DOCTOR.gln,
-  ]) {
-    drawLine(line, { size: 11, gap: 14 });
-  }
+  ];
 
-  y -= 10;
-  drawLine("REZEPT", { size: 16, font: bold, gap: 22 });
+  const patientLines = [
+    `Patient: ${patientName}`,
+    ...(patientAddress ? [`Adresse: ${patientAddress}`] : []),
+    `Geburtsdatum: ${birthdate}`,
+    `Zürich, ${formatSwissDate(issued)}`,
+  ];
 
-  const issued = input.issuedAt ?? new Date();
-  drawLine(`Zürich, ${formatSwissDate(issued)}`, { gap: 20 });
+  const leftBottom = drawLeftBlock(
+    page,
+    doctorLines,
+    headerTop,
+    regular,
+    bodySize,
+    bodyGap
+  );
+  const rightBottom = drawRightBlock(
+    page,
+    patientLines,
+    headerTop,
+    regular,
+    bodySize,
+    bodyGap
+  );
 
-  const patientName = formatPatientName(input.patient);
-  const patientAddress = formatPatientAddress(input.patient);
-  const birthdate = formatBirthdateForDisplay(input.patient.birthdate);
+  let y = Math.min(leftBottom, rightBottom) - 28;
+  drawCentered(page, "REZEPT", y, bold, 18);
+  y -= 48;
 
-  drawLine(`Patient: ${patientName}`, { gap: 16 });
-  if (patientAddress) {
-    drawLine(`Adresse: ${patientAddress}`, { gap: 16 });
-  }
-  drawLine(`Geburtsdatum: ${birthdate}`, { gap: 22 });
+  page.drawText("Diagnose:", {
+    x: MARGIN,
+    y,
+    size: 11,
+    font: bold,
+    color: black,
+  });
+  y -= 18;
 
-  drawLine("Diagnose:", { font: bold, gap: 16 });
   for (const line of splitLines(input.diagnosis)) {
-    drawLine(line, { gap: 14 });
+    page.drawText(line, { x: MARGIN, y, size: bodySize, font: regular, color: black });
+    y -= 15;
   }
 
-  y -= 8;
-  drawLine("Rp.", { font: bold, gap: 14 });
+  y -= 16;
+  page.drawText("Rp.", { x: MARGIN, y, size: 11, font: bold, color: black });
+  y -= 20;
 
-  const tableTop = y;
-  const headerY = tableTop;
-  const rowHeight = 18;
+  const headerY = y;
   const headerSize = 10;
 
   page.drawText("Medikament", {
@@ -138,27 +221,27 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
     color: black,
   });
 
-  y = headerY - 6;
+  y = headerY - 8;
   page.drawLine({
     start: { x: MARGIN, y },
     end: { x: PAGE_WIDTH - MARGIN, y },
     thickness: 0.5,
     color: black,
   });
-  y -= rowHeight;
+  y -= 18;
 
   for (const med of input.medications) {
-    const medLines = wrapText(med.name, COL_MEDIKAMENT - 8, 10);
-    const usageLines = med.usage ? wrapText(med.usage, COL_DOSIERUNG - 8, 10) : [""];
+    const medLines = wrapText(med.name, COL_MEDIKAMENT - 10, regular, 10);
+    const usageLines = med.usage
+      ? wrapText(med.usage, COL_DOSIERUNG - 8, regular, 10)
+      : [""];
     const remarkLines = med.remarks
-      ? wrapText(med.remarks, COL_BEMERKUNG - 8, 10)
+      ? wrapText(med.remarks, COL_BEMERKUNG - 8, regular, 10)
       : [""];
     const lineCount = Math.max(medLines.length, usageLines.length, remarkLines.length, 1);
     const blockHeight = lineCount * 14;
 
-    if (y - blockHeight < MARGIN + 80) {
-      break;
-    }
+    if (y - blockHeight < MARGIN + 80) break;
 
     for (let i = 0; i < lineCount; i += 1) {
       const lineY = y - i * 14;
@@ -191,14 +274,13 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
       }
     }
 
-    y -= blockHeight + 4;
+    y -= blockHeight + 10;
   }
 
-  y = Math.min(y, MARGIN + 120);
   page.drawText("Unterschrift und Stempel", {
     x: MARGIN,
-    y: MARGIN + 40,
-    size: 11,
+    y: MARGIN + 36,
+    size: 10.5,
     font: regular,
     color: black,
   });

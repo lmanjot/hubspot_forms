@@ -5,7 +5,7 @@ import {
   buildPrescriptionFilename,
   patientFromHubSpotProps,
 } from "../../../prescription/lib/formatPatient";
-import { uploadPdfToHubSpot } from "../../../prescription/lib/hubspotFiles";
+import { getSignedFileUrl, uploadPdfToHubSpot } from "../../../prescription/lib/hubspotFiles";
 import {
   PRESCRIPTION_JSON_PROPERTY,
   appendPrescriptionHistory,
@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
     });
 
     const fileId = await uploadPdfToHubSpot(token, pdfBytes, filename);
+    const downloadUrl = await getSignedFileUrl(token, fileId);
 
     const entry: PrescriptionHistoryEntry = {
       id: randomUUID(),
@@ -165,6 +166,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "X-Prescription-Id": entry.id,
+        ...(downloadUrl ? { "X-Prescription-Download-Url": downloadUrl } : {}),
       },
     });
   } catch (err) {

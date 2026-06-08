@@ -15,6 +15,12 @@ import type {
 
 const EMPTY_MEDICATION: MedicationRow = { name: "", usage: "", remarks: "" };
 
+type CompletedPrescription = {
+  id: string;
+  filename: string;
+  downloadUrl: string | null;
+};
+
 function formatHistoryDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -49,7 +55,7 @@ export default function PrescriptionContent() {
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [completed, setCompleted] = useState<CompletedPrescription | null>(null);
 
   const loadHistory = useCallback(async () => {
     if (!contactId) return;
@@ -65,8 +71,12 @@ export default function PrescriptionContent() {
       }
       setPatient(json.patient ?? null);
       setHistory(json.prescriptions ?? []);
+      return json.prescriptions as Array<
+        PrescriptionHistoryEntry & { downloadUrl: string | null }
+      >;
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Fehler beim Laden");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -90,12 +100,19 @@ export default function PrescriptionContent() {
     setMedications((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function startNewPrescription() {
+    setCompleted(null);
+    setDiagnosis("");
+    setMedications([{ ...EMPTY_MEDICATION }]);
+    setSubmitError(null);
+  }
+
   async function handleGenerate() {
     if (!contactId) return;
 
     setSubmitting(true);
     setSubmitError(null);
-    setSubmitSuccess(null);
+    setCompleted(null);
 
     try {
       const res = await fetch("/api/prescription/generate", {
@@ -113,20 +130,29 @@ export default function PrescriptionContent() {
       const disposition = res.headers.get("Content-Disposition") ?? "";
       const match = disposition.match(/filename="([^"]+)"/);
       const filename = match?.[1] ?? "Rezept.pdf";
+      const prescriptionId = res.headers.get("X-Prescription-Id") ?? "";
+      let downloadUrl = res.headers.get("X-Prescription-Download-Url");
 
-      const url = URL.createObjectURL(blob);
+      const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
-      anchor.href = url;
+      anchor.href = objectUrl;
       anchor.download = filename;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objectUrl);
 
-      setDiagnosis("");
-      setMedications([{ ...EMPTY_MEDICATION }]);
-      setSubmitSuccess("Rezept erstellt und heruntergeladen.");
-      await loadHistory();
+      const refreshed = await loadHistory();
+      if (!downloadUrl && prescriptionId && refreshed) {
+        downloadUrl =
+          refreshed.find((entry) => entry.id === prescriptionId)?.downloadUrl ?? null;
+      }
+
+      setCompleted({
+        id: prescriptionId,
+        filename,
+        downloadUrl,
+      });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Fehler beim Erstellen");
     } finally {
@@ -200,119 +226,155 @@ export default function PrescriptionContent() {
         )}
       </section>
 
-      <section className="card">
-        <h2 className="section-title">Neues Rezept</h2>
-
-        <div className="grid">
-          <div className="field">
-            <span className="field-label">Patient</span>
-            <div className="read-only-value">{patientName}</div>
-          </div>
-          <div className="field">
-            <span className="field-label">Geburtsdatum</span>
-            <div className="read-only-value">{patientBirthdate}</div>
-          </div>
-          <div className="field grid-full">
-            <span className="field-label">Adresse</span>
-            <div className="read-only-value">{patientAddress}</div>
-          </div>
-
-          <div className="field grid-full">
-            <label className="field-label" htmlFor="diagnosis">
-              Diagnose <span className="field-required">*</span>
-            </label>
-            <textarea
-              id="diagnosis"
-              className="input textarea"
-              rows={4}
-              value={diagnosis}
-              onChange={(e) => setDiagnosis(e.target.value)}
-              placeholder="z. B. Androgenetische Alopezie"
-            />
-          </div>
-        </div>
-
-        <div className="medications-section">
-          <div className="medications-header">
-            <h3 className="subsection-title">Medikamente</h3>
+      {completed ? (
+        <section className="card prescription-completed">
+          <h2 className="section-title">Rezept erstellt</h2>
+          <p className="card-description">
+            Das Rezept wurde gespeichert und heruntergeladen.
+          </p>
+          {completed.downloadUrl ? (
+            <a
+              className="button button-nav button-primary prescription-completed-link"
+              href={completed.downloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              PDF öffnen ({completed.filename})
+            </a>
+          ) : (
+            <p className="status-muted">
+              PDF gespeichert. Download-Link wird in Kürze in der Liste oben verfügbar sein.
+            </p>
+          )}
+          <div className="actions form-actions">
             <button
               type="button"
-              className="button button-secondary medication-add"
-              onClick={addMedication}
+              className="button button-nav button-secondary"
+              onClick={startNewPrescription}
             >
-              + Medikament
+              Neues Rezept erstellen
             </button>
           </div>
+        </section>
+      ) : (
+        <section className="card">
+          <h2 className="section-title">Neues Rezept</h2>
 
-          {medications.map((row, index) => (
-            <div key={index} className="medication-row card card-nested">
-              <div className="medication-row-header">
-                <span className="status-muted">Medikament {index + 1}</span>
-                {medications.length > 1 && (
-                  <button
-                    type="button"
-                    className="button button-secondary medication-remove"
-                    onClick={() => removeMedication(index)}
-                  >
-                    Entfernen
-                  </button>
-                )}
-              </div>
-              <div className="grid">
-                <div className="field grid-full">
-                  <label className="field-label" htmlFor={`med-name-${index}`}>
-                    Medikament <span className="field-required">*</span>
-                  </label>
-                  <input
-                    id={`med-name-${index}`}
-                    className="input"
-                    value={row.name}
-                    onChange={(e) => updateMedication(index, "name", e.target.value)}
-                    placeholder="z. B. Finasterid 1mg 28Stk"
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label" htmlFor={`med-usage-${index}`}>
-                    Dosierung
-                  </label>
-                  <input
-                    id={`med-usage-${index}`}
-                    className="input"
-                    value={row.usage}
-                    onChange={(e) => updateMedication(index, "usage", e.target.value)}
-                    placeholder="z. B. 1-0-0"
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label" htmlFor={`med-remarks-${index}`}>
-                    Bemerkung
-                  </label>
-                  <input
-                    id={`med-remarks-${index}`}
-                    className="input"
-                    value={row.remarks}
-                    onChange={(e) => updateMedication(index, "remarks", e.target.value)}
-                  />
-                </div>
-              </div>
+          <div className="grid">
+            <div className="field">
+              <span className="field-label">Patient</span>
+              <div className="read-only-value">{patientName}</div>
             </div>
-          ))}
-        </div>
+            <div className="field">
+              <span className="field-label">Geburtsdatum</span>
+              <div className="read-only-value">{patientBirthdate}</div>
+            </div>
+            <div className="field grid-full">
+              <span className="field-label">Adresse</span>
+              <div className="read-only-value">{patientAddress}</div>
+            </div>
 
-        {submitError && <p className="status-error">{submitError}</p>}
-        {submitSuccess && <p className="status-success">{submitSuccess}</p>}
+            <div className="field grid-full">
+              <label className="field-label" htmlFor="diagnosis">
+                Diagnose <span className="field-required">*</span>
+              </label>
+              <textarea
+                id="diagnosis"
+                className="input textarea"
+                rows={4}
+                value={diagnosis}
+                onChange={(e) => setDiagnosis(e.target.value)}
+                placeholder="z. B. Androgenetische Alopezie"
+              />
+            </div>
+          </div>
 
-        <div className="actions form-actions">
-          <button
-            type="button"
-            className="button button-nav button-primary"
-            disabled={submitting || loading}
-            onClick={handleGenerate}
-          >
-            {submitting ? "Wird erstellt…" : "Rezept erstellen"}
-          </button>
-        </div>
-      </section>
+          <div className="medications-section">
+            <h3 className="subsection-title">Medikamente</h3>
+
+            {medications.map((row, index) => (
+              <div key={index} className="medication-row card card-nested">
+                <div className="medication-row-header">
+                  <span className="status-muted">Medikament {index + 1}</span>
+                  {medications.length > 1 && (
+                    <button
+                      type="button"
+                      className="button button-secondary medication-remove"
+                      onClick={() => removeMedication(index)}
+                      aria-label={`Medikament ${index + 1} entfernen`}
+                    >
+                      <span className="medication-remove-icon" aria-hidden>
+                        ×
+                      </span>
+                      Entfernen
+                    </button>
+                  )}
+                </div>
+                <div className="grid">
+                  <div className="field grid-full">
+                    <label className="field-label" htmlFor={`med-name-${index}`}>
+                      Medikament <span className="field-required">*</span>
+                    </label>
+                    <input
+                      id={`med-name-${index}`}
+                      className="input"
+                      value={row.name}
+                      onChange={(e) => updateMedication(index, "name", e.target.value)}
+                      placeholder="z. B. Finasterid 1mg 28Stk"
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field-label" htmlFor={`med-usage-${index}`}>
+                      Dosierung
+                    </label>
+                    <input
+                      id={`med-usage-${index}`}
+                      className="input"
+                      value={row.usage}
+                      onChange={(e) => updateMedication(index, "usage", e.target.value)}
+                      placeholder="z. B. 1-0-0"
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field-label" htmlFor={`med-remarks-${index}`}>
+                      Bemerkung
+                    </label>
+                    <input
+                      id={`med-remarks-${index}`}
+                      className="input"
+                      value={row.remarks}
+                      onChange={(e) => updateMedication(index, "remarks", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div className="medication-add-row">
+              <button
+                type="button"
+                className="button button-secondary medication-add"
+                onClick={addMedication}
+              >
+                + Medikament
+              </button>
+            </div>
+          </div>
+
+          {submitError && <p className="status-error">{submitError}</p>}
+
+          <div className="actions form-actions">
+            <button
+              type="button"
+              className="button button-nav button-primary"
+              disabled={submitting || loading}
+              onClick={handleGenerate}
+            >
+              {submitting ? "Wird erstellt…" : "Rezept erstellen"}
+            </button>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

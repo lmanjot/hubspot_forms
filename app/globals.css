@@ -695,8 +695,26 @@ body {
   margin-bottom: 12px;
 }
 
+.medication-add-row {
+  margin: 0 0 14px;
+}
+
 .medication-add {
-  padding: 8px 12px;
+  padding: 8px 14px;
+}
+
+.medication-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+
+.medication-remove-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 700;
 }
 
 .card-nested {
@@ -712,9 +730,15 @@ body {
   margin-bottom: 10px;
 }
 
-.medication-remove {
-  padding: 6px 10px;
-  font-size: 0.82rem;
+.prescription-completed {
+  border-color: rgba(31, 138, 85, 0.35);
+  background: #f4fbf7;
+}
+
+.prescription-completed-link {
+  display: inline-flex;
+  text-decoration: none;
+  margin-top: 8px;
 }
 
 .status-success {
