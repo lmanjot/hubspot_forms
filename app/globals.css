@@ -446,6 +446,14 @@ body {
   padding: 10px 14px;
   font-size: 0.9rem;
   cursor: pointer;
+  user-select: none;
+}
+
+button.button {
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 1.2;
 }
 
 .button-nav {
@@ -716,6 +724,19 @@ body {
   font-size: 0.84rem;
 }
 
+.history-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.history-action-btn {
+  padding: 7px 12px;
+  font-size: 0.82rem;
+}
+
 .history-expanded-block {
   margin-bottom: 10px;
 }
@@ -759,12 +780,11 @@ body {
   background: var(--surface-soft);
 }
 
-.history-download {
+.history-action-btn,
+.prescription-completed-actions .button {
   display: inline-flex;
-  text-decoration: none;
-  white-space: nowrap;
-  padding: 7px 12px;
-  font-size: 0.82rem;
+  align-items: center;
+  justify-content: center;
 }
 
 .medications-section {

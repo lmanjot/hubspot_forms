@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   formatBirthdateForDisplay,
@@ -40,7 +40,13 @@ function diagnosisPreview(text: string): string {
   return first?.trim() ?? "";
 }
 
-function HistoryRow({ entry }: { entry: HistoryEntry }) {
+function HistoryRow({
+  entry,
+  onCopy,
+}: {
+  entry: HistoryEntry;
+  onCopy: (entry: HistoryEntry) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const preview = diagnosisPreview(entry.diagnosis);
   const medCount = entry.medications.length;
@@ -91,18 +97,26 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
                 ))}
               </ul>
             </div>
-            {entry.downloadUrl ? (
-              <a
-                className="button button-secondary history-download"
-                href={entry.downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+            <div className="history-item-actions">
+              <button
+                type="button"
+                className="button button-secondary history-action-btn"
+                onClick={() => onCopy(entry)}
               >
-                PDF herunterladen
-              </a>
-            ) : (
-              <span className="status-muted">Download nicht verfügbar</span>
-            )}
+                Rezept kopieren
+              </button>
+              {entry.downloadUrl ? (
+                <button
+                  type="button"
+                  className="button button-secondary history-action-btn"
+                  onClick={() => window.open(entry.downloadUrl!, "_blank", "noopener,noreferrer")}
+                >
+                  PDF herunterladen
+                </button>
+              ) : (
+                <span className="status-muted">Download nicht verfügbar</span>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -125,7 +139,9 @@ export default function PrescriptionContent() {
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const [completed, setCompleted] = useState<CompletedPrescription | null>(null);
+  const formSectionRef = useRef<HTMLElement | null>(null);
 
   const loadHistory = useCallback(async () => {
     if (!contactId) return;
@@ -175,6 +191,30 @@ export default function PrescriptionContent() {
     setSubmitError(null);
   }
 
+  function copyPrescription(entry: HistoryEntry) {
+    setCompleted(null);
+    setSubmitError(null);
+    setCopyNotice(null);
+    setDiagnosis(entry.diagnosis);
+    setMedications(
+      entry.medications.length > 0
+        ? entry.medications.map((med) => ({
+            name: med.name,
+            usage: med.usage ?? "",
+            remarks: med.remarks ?? "",
+          }))
+        : [{ ...EMPTY_MEDICATION }]
+    );
+    setCopyNotice("Vorheriges Rezept in das Formular übernommen.");
+    requestAnimationFrame(() => {
+      formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function openPdf(url: string) {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   async function handleGenerate() {
     if (!contactId) return;
 
@@ -195,20 +235,12 @@ export default function PrescriptionContent() {
       }
 
       const blob = await res.blob();
+      void blob;
       const disposition = res.headers.get("Content-Disposition") ?? "";
       const match = disposition.match(/filename="([^"]+)"/);
       const filename = match?.[1] ?? "Rezept.pdf";
       const prescriptionId = res.headers.get("X-Prescription-Id") ?? "";
       let downloadUrl = res.headers.get("X-Prescription-Download-Url");
-
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
 
       const refreshed = await loadHistory();
       if (!downloadUrl && prescriptionId && refreshed) {
@@ -250,7 +282,7 @@ export default function PrescriptionContent() {
         <div>
           <h1 className="page-title">Rezept erstellen</h1>
           <p className="page-subtitle">
-            Patientendaten aus HubSpot · PDF wird gespeichert und heruntergeladen
+            Patientendaten aus HubSpot · PDF wird in HubSpot gespeichert
           </p>
         </div>
       </header>
@@ -267,7 +299,7 @@ export default function PrescriptionContent() {
         {!loading && history.length > 0 && (
           <ul className="history-list history-list-compact">
             {history.map((entry) => (
-              <HistoryRow key={entry.id} entry={entry} />
+              <HistoryRow key={entry.id} entry={entry} onCopy={copyPrescription} />
             ))}
           </ul>
         )}
@@ -276,19 +308,16 @@ export default function PrescriptionContent() {
       {completed ? (
         <section className="card prescription-completed">
           <h2 className="section-title">Rezept erstellt</h2>
-          <p className="card-description">
-            Das Rezept wurde gespeichert und heruntergeladen.
-          </p>
+          <p className="card-description">Das Rezept wurde gespeichert.</p>
           <div className="prescription-completed-actions">
             {completed.downloadUrl ? (
-              <a
+              <button
+                type="button"
                 className="button button-primary"
-                href={completed.downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={() => openPdf(completed.downloadUrl!)}
               >
                 PDF öffnen
-              </a>
+              </button>
             ) : (
               <p className="status-muted prescription-completed-fallback">
                 PDF gespeichert. Download-Link wird in Kürze in der Liste oben
@@ -305,8 +334,10 @@ export default function PrescriptionContent() {
           </div>
         </section>
       ) : (
-        <section className="card">
+        <section className="card" ref={formSectionRef}>
           <h2 className="section-title">Neues Rezept</h2>
+
+          {copyNotice && <p className="status-success">{copyNotice}</p>}
 
           <div className="grid">
             <div className="field">
