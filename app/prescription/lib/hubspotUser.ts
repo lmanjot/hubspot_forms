@@ -7,7 +7,7 @@ export function normalizeCreatedByInput(
 ): PrescriptionCreatedBy | undefined {
   if (!raw) return undefined;
 
-  const id = raw.id?.trim() || raw.email?.trim();
+  const id = raw.id?.trim() || raw.email?.trim() || raw.name?.trim();
   if (!id) return undefined;
 
   const email = raw.email?.trim();
@@ -18,6 +18,35 @@ export function normalizeCreatedByInput(
     ...(email ? { email } : {}),
     ...(name ? { name } : {}),
   };
+}
+
+export function parseCreatedByFromSearchParams(searchParams: {
+  get(name: string): string | null;
+}): PrescriptionCreatedBy | undefined {
+  const jsonParam = searchParams.get("hs_user_json");
+  if (jsonParam) {
+    try {
+      const parsed = JSON.parse(jsonParam) as {
+        id?: string;
+        email?: string;
+        name?: string;
+      };
+      const fromJson = normalizeCreatedByInput(parsed);
+      if (fromJson) return fromJson;
+    } catch {
+      // fall through to individual params
+    }
+  }
+
+  return normalizeCreatedByInput({
+    id: searchParams.get("hs_user_id") ?? undefined,
+    email: searchParams.get("hs_user_email") ?? undefined,
+    name: searchParams.get("hs_user_name") ?? undefined,
+  });
+}
+
+export function viewerStorageKey(contactId: string): string {
+  return `prescription_viewer_${contactId}`;
 }
 
 export async function resolveCreatedBy(

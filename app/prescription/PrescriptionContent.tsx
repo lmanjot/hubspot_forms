@@ -13,7 +13,7 @@ import type {
   PrescriptionCreatedBy,
   PrescriptionHistoryEntry,
 } from "./types";
-import { normalizeCreatedByInput } from "./lib/hubspotUser";
+import { normalizeCreatedByInput, parseCreatedByFromSearchParams, viewerStorageKey } from "./lib/hubspotUser";
 
 const EMPTY_MEDICATION: MedicationRow = { name: "", usage: "", remarks: "" };
 
@@ -143,19 +143,11 @@ function HistoryRow({
   );
 }
 
-function getCreatedByFromSearchParams(searchParams: {
-  get(name: string): string | null;
-}): PrescriptionCreatedBy | undefined {
-  return normalizeCreatedByInput({
-    id: searchParams.get("hs_user_id") ?? undefined,
-    email: searchParams.get("hs_user_email") ?? undefined,
-    name: searchParams.get("hs_user_name") ?? undefined,
-  });
-}
-
 export default function PrescriptionContent() {
   const searchParams = useSearchParams();
   const contactId = searchParams.get("contact_id") ?? undefined;
+
+  const [viewer, setViewer] = useState<PrescriptionCreatedBy | undefined>(undefined);
 
   const [patient, setPatient] = useState<PatientInfo | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -198,6 +190,30 @@ export default function PrescriptionContent() {
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    if (!contactId) return;
+
+    const fromUrl = parseCreatedByFromSearchParams(searchParams);
+    if (fromUrl) {
+      setViewer(fromUrl);
+      try {
+        sessionStorage.setItem(viewerStorageKey(contactId), JSON.stringify(fromUrl));
+      } catch {
+        // ignore storage errors
+      }
+      return;
+    }
+
+    try {
+      const stored = sessionStorage.getItem(viewerStorageKey(contactId));
+      if (stored) {
+        setViewer(normalizeCreatedByInput(JSON.parse(stored)));
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [contactId, searchParams]);
 
   function updateMedication(index: number, field: keyof MedicationRow, value: string) {
     setMedications((prev) =>
@@ -259,7 +275,11 @@ export default function PrescriptionContent() {
           contactId,
           diagnosis,
           medications,
-          createdBy: getCreatedByFromSearchParams(searchParams),
+          createdBy: viewer,
+          hs_user_id: viewer?.id,
+          hs_user_email: viewer?.email,
+          hs_user_name: viewer?.name,
+          hs_user_json: viewer ? JSON.stringify(viewer) : undefined,
         }),
       });
 

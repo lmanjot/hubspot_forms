@@ -14,6 +14,7 @@ import {
 import type { MedicationRow, PrescriptionHistoryEntry } from "../../../prescription/types";
 import {
   normalizeCreatedByInput,
+  parseCreatedByFromSearchParams,
   resolveCreatedBy,
 } from "../../../prescription/lib/hubspotUser";
 
@@ -38,6 +39,10 @@ type GenerateBody = {
     email?: string;
     name?: string;
   };
+  hs_user_id?: string;
+  hs_user_email?: string;
+  hs_user_name?: string;
+  hs_user_json?: string;
 };
 
 function normalizeMedications(
@@ -78,7 +83,17 @@ export async function POST(req: NextRequest) {
   const contactId = body.contactId?.trim();
   const diagnosis = body.diagnosis?.trim();
   const medications = normalizeMedications(body.medications);
-  const createdByInput = normalizeCreatedByInput(body.createdBy);
+  const createdByInput =
+    normalizeCreatedByInput(body.createdBy) ??
+    (body.hs_user_json
+      ? parseCreatedByFromSearchParams({
+          get: (name) => (name === "hs_user_json" ? body.hs_user_json! : null),
+        })
+      : normalizeCreatedByInput({
+          id: body.hs_user_id,
+          email: body.hs_user_email,
+          name: body.hs_user_name,
+        }));
 
   if (!contactId) {
     return NextResponse.json({ error: "Missing contactId" }, { status: 400 });
@@ -130,7 +145,7 @@ export async function POST(req: NextRequest) {
     const createdBy =
       (await resolveCreatedBy(token, createdByInput)) ?? createdByInput;
 
-    const entry: PrescriptionHistoryEntry = {
+  const entry: PrescriptionHistoryEntry = {
       id: randomUUID(),
       createdAt: issuedAt.toISOString(),
       fileId,
@@ -143,6 +158,13 @@ export async function POST(req: NextRequest) {
       })),
       ...(createdBy ? { createdBy } : {}),
     };
+
+    if (!createdBy) {
+      console.warn("Prescription created without createdBy metadata", {
+        contactId,
+        received: body.createdBy ?? body.hs_user_json ?? body.hs_user_id,
+      });
+    }
 
     const existing = parsePrescriptionHistory(props[PRESCRIPTION_JSON_PROPERTY]);
     const history = appendPrescriptionHistory(existing, entry);
