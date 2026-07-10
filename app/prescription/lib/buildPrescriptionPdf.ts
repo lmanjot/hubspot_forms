@@ -199,7 +199,7 @@ export async function buildPrescriptionPdf(input: BuildPdfInput): Promise<Uint8A
   rightBottom -= bodyGap;
 
   let y = rightBottom - 28;
-  drawCentered(page, "REZEPT", y, bold, 18);
+  drawCentered(page, "PRIVATREZEPT", y, bold, 18);
   y -= 48;
 
   page.drawText("Diagnose:", {
